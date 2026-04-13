@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { deckSubmitSchema } from "@shared/schema";
 import { randomUUID } from "crypto";
+import Anthropic from "@anthropic-ai/sdk";
 
 // Scryfall card lookup
 async function lookupCard(cardName: string): Promise<any> {
@@ -87,7 +88,7 @@ function computeStats(cards: Array<{ quantity: number; data: any }>) {
   };
 }
 
-// AI analysis via Claude
+// AI analysis via Claude (Anthropic SDK)
 async function aiAnalysis(
   deckName: string,
   format: string,
@@ -95,13 +96,6 @@ async function aiAnalysis(
   stats: any,
   cardDetails: Array<{ quantity: number; data: any }>
 ): Promise<string> {
-  const apiKey = process.env.LLM_API_KEY;
-  const baseUrl = process.env.LLM_BASE_URL || "https://api.openai.com/v1";
-
-  if (!apiKey) {
-    return generateFallbackAnalysis(deckName, format, entries, stats);
-  }
-
   const cardSummary = cardDetails
     .filter((c) => c.data)
     .slice(0, 40)
@@ -132,27 +126,15 @@ Provide a concise, professional analysis with these sections:
 Be specific about card names. Reference actual ${format}-legal cards in suggestions. Keep it actionable and expert-level.`;
 
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: prompt }],
-      }),
+    const client = new Anthropic();
+    const message = await client.messages.create({
+      model: "claude_sonnet_4_6",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
     });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error("AI API error:", errText);
-      return generateFallbackAnalysis(deckName, format, entries, stats);
-    }
-
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content || generateFallbackAnalysis(deckName, format, entries, stats);
+    const textBlock = message.content.find((b: any) => b.type === "text");
+    return (textBlock as any)?.text || generateFallbackAnalysis(deckName, format, entries, stats);
   } catch (err) {
     console.error("AI analysis failed:", err);
     return generateFallbackAnalysis(deckName, format, entries, stats);
