@@ -125,7 +125,7 @@ export default function Chronicle() {
                   <Eye className="w-3.5 h-3.5 text-primary" />
                   Counsel of the Stone
                 </h3>
-                <AnalysisView content={selectedAnalysis.analysisResult || ""} />
+                <AnalysisView content={selectedAnalysis.analysisResult || ""} decklist={selectedAnalysis.decklist || ""} />
               </CardContent>
             </Card>
           </div>

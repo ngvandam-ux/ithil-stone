@@ -187,34 +187,48 @@ export default function Home() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
         {/* Show analysis or input form */}
         {currentAnalysis ? (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="font-display text-lg font-semibold">
-                  {currentAnalysis.analysis.deckName}
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                  {currentAnalysis.analysis.format.charAt(0).toUpperCase() +
-                    currentAnalysis.analysis.format.slice(1)}{" "}
-                  · {currentAnalysis.analysis.cardCount} cards marshalled
-                </p>
+          <div className="space-y-5">
+            {/* Deck header banner */}
+            <div className="rounded-xl border border-border/40 bg-card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5 mb-1">
+                    <h2 className="font-display text-lg font-bold tracking-wide">
+                      {currentAnalysis.analysis.deckName}
+                    </h2>
+                    <Badge variant="secondary" className="text-xs font-medium">
+                      {currentAnalysis.analysis.format.charAt(0).toUpperCase() +
+                        currentAnalysis.analysis.format.slice(1)}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {currentAnalysis.analysis.cardCount} cards marshalled
+                    {currentAnalysis.stats?.sideboardCards > 0 && (
+                      <> · {currentAnalysis.stats.sideboardCards} in reserve</>
+                    )}
+                    {currentAnalysis.stats?.totalPrice > 0 && (
+                      <> · ~${currentAnalysis.stats.totalPrice.toFixed(0)} treasury</>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentAnalysis(null)}
+                  className="shrink-0"
+                  data-testid="button-new-analysis"
+                >
+                  New Vision
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentAnalysis(null)}
-                data-testid="button-new-analysis"
-              >
-                New Vision
-              </Button>
             </div>
 
-            {/* Enhanced stats */}
+            {/* Quick stats row */}
             <StatsCards stats={currentAnalysis.stats || {}} />
 
             {/* Charts row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card className="border-border/50">
+              <Card className="border-border/40">
                 <CardContent className="p-4">
                   <h3 className="font-display text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
                     <BarChart3 className="w-3.5 h-3.5" />
@@ -228,7 +242,7 @@ export default function Home() {
                   />
                 </CardContent>
               </Card>
-              <Card className="border-border/50">
+              <Card className="border-border/40">
                 <CardContent className="p-4">
                   <h3 className="font-display text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5" />
@@ -244,25 +258,29 @@ export default function Home() {
               </Card>
             </div>
 
-            {/* AI Analysis */}
-            <Card className="border-border/50 palantir-glow">
-              <CardContent className="p-5">
-                <h3 className="font-display text-xs font-medium text-muted-foreground mb-4 flex items-center gap-1.5">
-                  <Eye className="w-3.5 h-3.5 text-primary" />
-                  Counsel of the Stone
-                </h3>
-                <AnalysisView
-                  content={currentAnalysis.analysis.analysisResult || ""}
-                />
-              </CardContent>
-            </Card>
+            {/* Section divider */}
+            <div className="flex items-center gap-3 pt-1">
+              <div className="h-px flex-1 bg-border/30" />
+              <div className="flex items-center gap-1.5 text-muted-foreground/50">
+                <Eye className="w-3.5 h-3.5 text-primary/50" />
+                <span className="text-[10px] uppercase tracking-[0.15em] font-medium">Counsel of the Stone</span>
+              </div>
+              <div className="h-px flex-1 bg-border/30" />
+            </div>
 
-            {/* Flavor quote at bottom of analysis */}
-            <div className="text-center py-4">
-              <p className="text-xs text-muted-foreground/60 italic max-w-md mx-auto">
+            {/* AI Analysis — collapsible sections */}
+            <AnalysisView
+              content={currentAnalysis.analysis.analysisResult || ""}
+              decklist={currentAnalysis.analysis.decklist || ""}
+            />
+
+            {/* Flavor quote at bottom */}
+            <div className="text-center py-6">
+              <div className="w-8 h-px bg-primary/20 mx-auto mb-4" />
+              <p className="font-elvish text-sm text-muted-foreground/50 italic max-w-md mx-auto leading-relaxed">
                 "{randomQuote.quote}"
               </p>
-              <p className="text-[10px] text-muted-foreground/40 mt-1">
+              <p className="text-[10px] text-muted-foreground/30 mt-2 font-elvish">
                 {randomQuote.attribution}
               </p>
             </div>

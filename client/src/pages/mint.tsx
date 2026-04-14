@@ -31,9 +31,9 @@ const SOLANA_WALLET = "5purmEfPT59dbTupSXjk7XxZqQGmbsvLsXmBNSsBE2us";
 // Instructions: Create 3 payment links in Stripe Dashboard → Payment Links → +New
 // Set each to the pack price. Paste the URLs here.
 const STRIPE_LINKS: Record<string, string> = {
-  "pack-5": "STRIPE_LINK_SCOUT_POUCH",       // $4.99 — replace with your real Stripe link
-  "pack-15": "STRIPE_LINK_RANGER_SATCHEL",    // $9.99
-  "pack-50": "STRIPE_LINK_WAR_CHEST",         // $24.99
+  "pack-3": "STRIPE_LINK_SCOUT_POUCH",        // $1.99 — replace with your real Stripe link
+  "pack-10": "STRIPE_LINK_RANGER_SATCHEL",    // $4.99
+  "pack-30": "STRIPE_LINK_WAR_CHEST",         // $12.99
 };
 
 interface RingPack {
@@ -45,15 +45,15 @@ interface RingPack {
 }
 
 const PACK_LORE: Record<string, { desc: string; icon: string }> = {
-  "pack-5": {
+  "pack-3": {
     desc: "A small pouch of mithril, enough for a scout's errand.",
     icon: "🗡️",
   },
-  "pack-15": {
+  "pack-10": {
     desc: "The trusted satchel of a Ranger of the North — provisions for many roads.",
     icon: "⚔️",
   },
-  "pack-50": {
+  "pack-30": {
     desc: "A chest fit for a lord of war. With this, counsel without end.",
     icon: "👑",
   },

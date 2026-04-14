@@ -429,7 +429,7 @@ CRITICAL FORMAT RULES:
   try {
     const client = new Anthropic();
     const message = await client.messages.create({
-      model: "claude-opus-4-20250514",
+      model: "claude-opus-4-6",
       max_tokens: 16384,
       messages: [{ role: "user", content: prompt }],
     });
@@ -884,9 +884,9 @@ export async function registerRoutes(
 
   // ── Ring Packs (pricing) ─────────────────────────────────────────
   const RING_PACKS = [
-    { id: "pack-5", rings: 5, priceUsd: 4.99, priceSol: 0.025, label: "Scout's Pouch" },
-    { id: "pack-15", rings: 15, priceUsd: 9.99, priceSol: 0.05, label: "Ranger's Satchel" },
-    { id: "pack-50", rings: 50, priceUsd: 24.99, priceSol: 0.12, label: "War Chest" },
+    { id: "pack-3", rings: 3, priceUsd: 1.99, priceSol: 0.014, label: "Scout's Pouch" },
+    { id: "pack-10", rings: 10, priceUsd: 4.99, priceSol: 0.035, label: "Ranger's Satchel" },
+    { id: "pack-30", rings: 30, priceUsd: 12.99, priceSol: 0.09, label: "War Chest" },
   ];
 
   app.get("/api/ring-packs", (_req, res) => {
