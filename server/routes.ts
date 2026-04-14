@@ -1,7 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { deckSubmitSchema } from "@shared/schema";
+import { storage, db } from "./storage";
+import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable } from "@shared/schema";
+import { desc } from "drizzle-orm";
 import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
@@ -1141,6 +1142,76 @@ export async function registerRoutes(
       manaCost: data.mana_cost,
       typeLine: data.type_line,
       imageUri: data.image_uris?.small || data.image_uris?.normal || null,
+    });
+  });
+
+  // ── Admin API endpoints (for Command Station) ──────────────────
+  const ADMIN_SECRET = process.env.ADMIN_SECRET || "mellon";
+
+  // CORS for admin endpoints (command station is on a different domain)
+  app.use("/api/admin", (req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-admin-secret");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    if (req.method === "OPTIONS") return res.sendStatus(200);
+    next();
+  });
+
+  function requireAdmin(req: any, res: any, next: any) {
+    const secret = req.headers["x-admin-secret"];
+    if (secret !== ADMIN_SECRET) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    next();
+  }
+
+  // Admin: Get all users
+  app.get("/api/admin/users", requireAdmin, async (_req, res) => {
+    const allUsers = db.select().from(usersTable).all();
+    res.json(allUsers);
+  });
+
+  // Admin: Get all analyses
+  app.get("/api/admin/analyses", requireAdmin, async (_req, res) => {
+    const allAnalyses = db.select().from(analysesTable).orderBy(desc(analysesTable.id)).all();
+    res.json(allAnalyses);
+  });
+
+  // Admin: Get all transactions
+  app.get("/api/admin/transactions", requireAdmin, async (_req, res) => {
+    const allTx = db.select().from(transactionsTable).orderBy(desc(transactionsTable.id)).all();
+    res.json(allTx);
+  });
+
+  // Admin: Get all credits
+  app.get("/api/admin/credits", requireAdmin, async (_req, res) => {
+    const allCredits = db.select().from(creditsTable).all();
+    res.json(allCredits);
+  });
+
+  // Admin: Dashboard stats
+  app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
+    const totalUsers = db.select().from(usersTable).all().length;
+    const totalAnalyses = db.select().from(analysesTable).all().length;
+    const totalTransactions = db.select().from(transactionsTable).all().length;
+    const allCredits = db.select().from(creditsTable).all();
+    const totalRingsInCirculation = allCredits.reduce((sum, c) => sum + c.coins, 0);
+
+    // Revenue calculation
+    const confirmedTx = db.select().from(transactionsTable).all()
+      .filter(t => t.status === "confirmed");
+    const totalRevenue = confirmedTx.reduce((sum, t) => {
+      const price = parseFloat(t.pricePaid.replace(/[^0-9.]/g, "")) || 0;
+      return sum + price;
+    }, 0);
+
+    res.json({
+      totalUsers,
+      totalAnalyses,
+      totalTransactions,
+      totalRingsInCirculation,
+      totalRevenue: totalRevenue.toFixed(2),
+      confirmedTransactions: confirmedTx.length,
     });
   });
 
