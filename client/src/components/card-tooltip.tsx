@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 
 /**
  * CardTooltip — Hover over any MTG card name to see its Scryfall image.
@@ -21,6 +21,30 @@ const cardCache = new Map<
 
 // Pending fetches to avoid duplicate requests
 const pendingFetches = new Map<string, Promise<boolean>>();
+
+// Rate-limited queue for Scryfall API (max 8 req/s to stay under 10/s limit)
+const fetchQueue: Array<() => void> = [];
+let fetchInFlight = 0;
+const MAX_CONCURRENT = 8;
+
+function enqueueFetch(fn: () => Promise<void>) {
+  const run = async () => {
+    fetchInFlight++;
+    try { await fn(); } finally {
+      fetchInFlight--;
+      // Process next in queue after a small delay
+      setTimeout(() => {
+        const next = fetchQueue.shift();
+        if (next) next();
+      }, 120);
+    }
+  };
+  if (fetchInFlight < MAX_CONCURRENT) {
+    run();
+  } else {
+    fetchQueue.push(run);
+  }
+}
 
 // Names that are definitely NOT card names (common markdown labels)
 const NOT_CARD_NAMES = new Set([
@@ -73,27 +97,31 @@ function isLikelyLabel(text: string): boolean {
   return false;
 }
 
-async function prefetchCard(cardName: string): Promise<boolean> {
+function prefetchCard(cardName: string): Promise<boolean> {
   const key = cardName.toLowerCase();
 
   if (cardCache.has(key)) {
-    return cardCache.get(key)!.exists;
+    return Promise.resolve(cardCache.get(key)!.exists);
   }
 
   if (pendingFetches.has(key)) {
     return pendingFetches.get(key)!;
   }
 
-  const fetchPromise = (async () => {
+  let resolve: (val: boolean) => void;
+  const fetchPromise = new Promise<boolean>((r) => { resolve = r; });
+  pendingFetches.set(key, fetchPromise);
+
+  enqueueFetch(async () => {
     try {
-      // Use the JSON endpoint to verify + get scryfall_uri
       const res = await fetch(
         `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName)}`,
         { method: "GET" }
       );
       if (!res.ok) {
         cardCache.set(key, { exists: false });
-        return false;
+        resolve!(false);
+        return;
       }
       const data = await res.json();
       const imageUrl =
@@ -106,16 +134,15 @@ async function prefetchCard(cardName: string): Promise<boolean> {
         imageUrl: imageUrl || undefined,
         scryfallUrl: scryfallUrl || undefined,
       });
-      return !!imageUrl;
+      resolve!(!!imageUrl);
     } catch {
       cardCache.set(key, { exists: false });
-      return false;
+      resolve!(false);
     } finally {
       pendingFetches.delete(key);
     }
-  })();
+  });
 
-  pendingFetches.set(key, fetchPromise);
   return fetchPromise;
 }
 
@@ -153,6 +180,36 @@ export default function CardTooltip({
 
   // Quick check if this is obviously not a card name
   const isLabel = isLikelyLabel(cleanName);
+
+  // Eagerly verify card on mount (not just on hover) so link styling shows immediately
+  useEffect(() => {
+    if (isLabel || isCard === true) return;
+    // If it's a known deck card, mark it immediately
+    if (knownCards?.has(key)) {
+      setIsCard(true);
+      setScryfallUrl(`https://scryfall.com/search?q=${encodeURIComponent(`!"${cleanName}"`)}`);  
+      return;
+    }
+    // Check cache
+    const cached = cardCache.get(key);
+    if (cached) {
+      setIsCard(cached.exists);
+      if (cached.exists) {
+        setImageUrl(cached.imageUrl || null);
+        setScryfallUrl(cached.scryfallUrl || null);
+      }
+      return;
+    }
+    // Pre-fetch from Scryfall in background
+    prefetchCard(cleanName).then((exists) => {
+      setIsCard(exists);
+      if (exists) {
+        const data = cardCache.get(key);
+        if (data?.imageUrl) setImageUrl(data.imageUrl);
+        if (data?.scryfallUrl) setScryfallUrl(data.scryfallUrl);
+      }
+    });
+  }, [cleanName, key, isLabel, isCard, knownCards]);
 
   const handleMouseEnter = useCallback(() => {
     if (isLabel) return;
@@ -212,7 +269,7 @@ export default function CardTooltip({
         setScryfallUrl(data?.scryfallUrl || null);
         setShowTooltip(true);
       }
-    }, 200);
+    }, 150);
   }, [cleanName, key, isLabel, knownCards]);
 
   const handleMouseLeave = useCallback(() => {
