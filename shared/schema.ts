@@ -37,6 +37,25 @@ export const insertCreditSchema = createInsertSchema(credits).omit({
 export type InsertCredit = z.infer<typeof insertCreditSchema>;
 export type Credit = typeof credits.$inferSelect;
 
+// Transactions table - tracks coin purchases
+export const transactions = sqliteTable("transactions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionId: text("session_id").notNull(),
+  method: text("method").notNull(), // 'solana' | 'paypal'
+  amount: integer("amount").notNull(), // coins purchased
+  pricePaid: text("price_paid").notNull(), // e.g. "4.99" or "0.02 SOL"
+  txSignature: text("tx_signature"), // Solana tx sig or PayPal order ID
+  status: text("status").notNull().default("pending"), // pending | confirmed | failed
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertTransactionSchema = createInsertSchema(transactions).omit({
+  id: true,
+});
+
+export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
+export type Transaction = typeof transactions.$inferSelect;
+
 // Validation schema for deck submission
 export const deckSubmitSchema = z.object({
   deckName: z.string().min(1, "Deck name is required").max(100),

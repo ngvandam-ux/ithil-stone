@@ -3,8 +3,11 @@ import {
   type InsertAnalysis,
   type Credit,
   type InsertCredit,
+  type Transaction,
+  type InsertTransaction,
   analyses,
   credits,
+  transactions,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -20,11 +23,18 @@ export interface IStorage {
   createAnalysis(analysis: InsertAnalysis): Promise<Analysis>;
   getAnalysis(id: number): Promise<Analysis | undefined>;
   getAnalysesBySession(sessionId: string): Promise<Analysis[]>;
+  getAnalysesByFormat(format: string): Promise<Analysis[]>;
 
   // Credits
   getCredits(sessionId: string): Promise<Credit | undefined>;
   initCredits(sessionId: string): Promise<Credit>;
   deductCoin(sessionId: string): Promise<Credit | undefined>;
+  addCoins(sessionId: string, amount: number): Promise<Credit | undefined>;
+
+  // Transactions
+  createTransaction(tx: InsertTransaction): Promise<Transaction>;
+  getTransactionsBySession(sessionId: string): Promise<Transaction[]>;
+  updateTransactionStatus(id: number, status: string, txSignature?: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -41,6 +51,15 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(analyses)
       .where(eq(analyses.sessionId, sessionId))
+      .orderBy(desc(analyses.id))
+      .all();
+  }
+
+  async getAnalysesByFormat(format: string): Promise<Analysis[]> {
+    return db
+      .select()
+      .from(analyses)
+      .where(eq(analyses.format, format))
       .orderBy(desc(analyses.id))
       .all();
   }
@@ -71,6 +90,37 @@ export class DatabaseStorage implements IStorage {
       .where(eq(credits.sessionId, sessionId))
       .run();
     return this.getCredits(sessionId);
+  }
+
+  async addCoins(sessionId: string, amount: number): Promise<Credit | undefined> {
+    const current = await this.initCredits(sessionId);
+    db.update(credits)
+      .set({ coins: current.coins + amount })
+      .where(eq(credits.sessionId, sessionId))
+      .run();
+    return this.getCredits(sessionId);
+  }
+
+  async createTransaction(tx: InsertTransaction): Promise<Transaction> {
+    return db.insert(transactions).values(tx).returning().get();
+  }
+
+  async getTransactionsBySession(sessionId: string): Promise<Transaction[]> {
+    return db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.sessionId, sessionId))
+      .orderBy(desc(transactions.id))
+      .all();
+  }
+
+  async updateTransactionStatus(id: number, status: string, txSignature?: string): Promise<void> {
+    const updates: any = { status };
+    if (txSignature) updates.txSignature = txSignature;
+    db.update(transactions)
+      .set(updates)
+      .where(eq(transactions.id, id))
+      .run();
   }
 }
 

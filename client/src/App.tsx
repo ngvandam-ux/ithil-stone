@@ -7,13 +7,21 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
+import Chronicle from "@/pages/chronicle";
+import Mint from "@/pages/mint";
+import AppNav from "@/components/app-nav";
 
 function AppRouter() {
   return (
-    <Switch>
-      <Route path="/" component={Home} />
-      <Route component={NotFound} />
-    </Switch>
+    <>
+      <AppNav />
+      <Switch>
+        <Route path="/" component={Home} />
+        <Route path="/chronicle" component={Chronicle} />
+        <Route path="/mint" component={Mint} />
+        <Route component={NotFound} />
+      </Switch>
+    </>
   );
 }
 

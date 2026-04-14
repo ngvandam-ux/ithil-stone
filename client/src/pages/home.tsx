@@ -14,26 +14,59 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import {
-  Sparkles,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
+import {
   Coins,
   BarChart3,
   Loader2,
-  ChevronDown,
-  Sun,
-  Moon,
   Layers,
-  Target,
-  Zap,
-  History,
   ArrowRight,
+  Eye,
+  Scroll,
+  Shield,
+  Swords,
 } from "lucide-react";
-import { useTheme } from "@/components/theme-provider";
 import type { Analysis } from "@shared/schema";
 import AnalysisView from "@/components/analysis-view";
 import ManaCurveChart from "@/components/mana-curve-chart";
+import StatsCards from "@/components/stats-cards";
 import ColorDistChart from "@/components/color-dist-chart";
+import DeckImport from "@/components/deck-import";
+import LoadingOverlay from "@/components/loading-overlay";
+
+// ── LOTR lore data ──────────────────────────────────────────────────
+
+
+const FLAVOR_QUOTES = [
+  { quote: "He that breaks a thing to find out what it is has left the path of wisdom.", attribution: "— Gandalf" },
+  { quote: "The wise speak only of what they know.", attribution: "— Gandalf" },
+  { quote: "Even the smallest person can change the course of the future.", attribution: "— Galadriel" },
+  { quote: "Faithless is he that says farewell when the road darkens.", attribution: "— Gimli" },
+  { quote: "One who cannot cast away a treasure at need is in fetters.", attribution: "— Aragorn" },
+  { quote: "In doubt, a man of worth will trust to his own wisdom.", attribution: "— Túrin Turambar" },
+];
+
+const EMPTY_STATE_MESSAGES = [
+  "The stone is dark. Present your forces for counsel.",
+  "The palantír awaits. No host has yet been shown.",
+  "The seeing-stone rests in silence. Bring forth your deck.",
+  "No armies march in the vision. Submit your list to begin.",
+  "The Eye sees nothing. Lay your cards before the stone.",
+];
+
+const AGE_FACTS = [
+  "Seven palantíri were made by Fëanor in the First Age — their craft was never equalled.",
+  "Sauron possessed the Ithil-stone after Minas Ithil fell, turning it into a trap for unwary minds.",
+  "Aragorn wrested control of the Orthanc palantír from Sauron by sheer will alone.",
+  "The palantíri could only show true things, yet Sauron deceived by revealing select truths.",
+  "The Master Stone on Tol Eressëa was aware of all the others simultaneously.",
+];
 
 const FORMATS = [
   { value: "standard", label: "Standard" },
@@ -61,23 +94,41 @@ const SAMPLE_DECK = `4 Lightning Bolt
 2 Flames of the Blood Hand
 20 Mountain`;
 
+// Palantír SVG logo component
+function PalantirLogo({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 32 32"
+      fill="none"
+      className={className}
+      aria-label="Ithil-stone"
+    >
+      <circle cx="16" cy="16" r="14" stroke="currentColor" strokeWidth="1.5" opacity="0.3" />
+      <circle cx="16" cy="16" r="10" stroke="currentColor" strokeWidth="1.2" opacity="0.6" />
+      <ellipse cx="16" cy="16" rx="5" ry="7" stroke="currentColor" strokeWidth="1" opacity="0.8" />
+      <circle cx="16" cy="16" r="2.5" fill="currentColor" opacity="0.7" />
+      <circle cx="13.5" cy="13" r="1.2" fill="currentColor" opacity="0.4" />
+      <circle cx="16" cy="4" r="0.8" fill="currentColor" opacity="0.5" />
+      <circle cx="11" cy="5.5" r="0.6" fill="currentColor" opacity="0.35" />
+      <circle cx="21" cy="5.5" r="0.6" fill="currentColor" opacity="0.35" />
+    </svg>
+  );
+}
+
 export default function Home() {
-  const { theme, toggleTheme } = useTheme();
   const { toast } = useToast();
   const [deckName, setDeckName] = useState("");
   const [format, setFormat] = useState("modern");
   const [decklist, setDecklist] = useState("");
   const [currentAnalysis, setCurrentAnalysis] = useState<any | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+
+  const [randomQuote] = useState(() => FLAVOR_QUOTES[Math.floor(Math.random() * FLAVOR_QUOTES.length)]);
+  const [emptyMsg] = useState(() => EMPTY_STATE_MESSAGES[Math.floor(Math.random() * EMPTY_STATE_MESSAGES.length)]);
+  const [ageFact] = useState(() => AGE_FACTS[Math.floor(Math.random() * AGE_FACTS.length)]);
 
   // Fetch credits
   const { data: creditsData } = useQuery<{ coins: number }>({
     queryKey: ["/api/credits"],
-  });
-
-  // Fetch analysis history
-  const { data: historyData } = useQuery<Analysis[]>({
-    queryKey: ["/api/analyses"],
   });
 
   // Analysis mutation
@@ -93,9 +144,9 @@ export default function Home() {
     },
     onError: (err: Error) => {
       toast({
-        title: "Analysis Failed",
+        title: "The Stone Dims",
         description: err.message.includes("402")
-          ? "No coins remaining. Each session starts with 3 free analyses."
+          ? "No Mithril Rings remain. Visit the Dwarven Mint to forge more."
           : err.message,
         variant: "destructive",
       });
@@ -104,11 +155,11 @@ export default function Home() {
 
   const handleAnalyze = () => {
     if (!deckName.trim()) {
-      toast({ title: "Enter a deck name", variant: "destructive" });
+      toast({ title: "Name your host", description: "Every army requires a name.", variant: "destructive" });
       return;
     }
     if (!decklist.trim()) {
-      toast({ title: "Paste your decklist", variant: "destructive" });
+      toast({ title: "The stone sees nothing", description: "Present your decklist for counsel.", variant: "destructive" });
       return;
     }
     analyzeMutation.mutate({ deckName, format, decklist });
@@ -130,110 +181,22 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border/50 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-primary" />
-            </div>
-            <span className="font-semibold text-sm tracking-tight" data-testid="app-title">
-              Arcane Study
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Coin balance */}
-            <div
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
-              data-testid="coin-balance"
-            >
-              <Coins className="w-3.5 h-3.5" />
-              <span>{creditsData?.coins ?? "..."}</span>
-              <span className="text-primary/60">coins</span>
-            </div>
-
-            {/* History toggle */}
-            {historyData && historyData.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowHistory(!showHistory)}
-                className="text-xs gap-1.5"
-                data-testid="button-history"
-              >
-                <History className="w-3.5 h-3.5" />
-                History
-              </Button>
-            )}
-
-            {/* Theme toggle */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="w-8 h-8"
-              data-testid="button-theme"
-            >
-              {theme === "dark" ? (
-                <Sun className="w-4 h-4" />
-              ) : (
-                <Moon className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-      </header>
+      {/* Full-screen loading overlay with Elvish quotes */}
+      <LoadingOverlay visible={analyzeMutation.isPending} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        {/* History panel */}
-        {showHistory && historyData && historyData.length > 0 && (
-          <div className="mb-8 space-y-2">
-            <h3 className="text-sm font-medium text-muted-foreground mb-3">
-              Previous Analyses
-            </h3>
-            <div className="grid gap-2">
-              {historyData.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    setCurrentAnalysis({
-                      analysis: a,
-                      stats: {
-                        manaCurve: JSON.parse(a.manaCurve || "{}"),
-                        colorDistribution: JSON.parse(a.colorDistribution || "{}"),
-                      },
-                    });
-                    setShowHistory(false);
-                  }}
-                  className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors text-left"
-                  data-testid={`history-item-${a.id}`}
-                >
-                  <div>
-                    <span className="text-sm font-medium">{a.deckName}</span>
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {a.format} · {a.cardCount} cards
-                    </span>
-                  </div>
-                  <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Show analysis or input form */}
         {currentAnalysis ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold">
+                <h2 className="font-display text-lg font-semibold">
                   {currentAnalysis.analysis.deckName}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {currentAnalysis.analysis.format.charAt(0).toUpperCase() +
                     currentAnalysis.analysis.format.slice(1)}{" "}
-                  · {currentAnalysis.analysis.cardCount} cards
+                  · {currentAnalysis.analysis.cardCount} cards marshalled
                 </p>
               </div>
               <Button
@@ -242,17 +205,20 @@ export default function Home() {
                 onClick={() => setCurrentAnalysis(null)}
                 data-testid="button-new-analysis"
               >
-                New Analysis
+                New Vision
               </Button>
             </div>
 
-            {/* Stats row */}
+            {/* Enhanced stats */}
+            <StatsCards stats={currentAnalysis.stats || {}} />
+
+            {/* Charts row */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Card className="border-border/50">
                 <CardContent className="p-4">
-                  <h3 className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h3 className="font-display text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
                     <BarChart3 className="w-3.5 h-3.5" />
-                    Mana Curve
+                    The Curve of Battle
                   </h3>
                   <ManaCurveChart
                     data={
@@ -264,9 +230,9 @@ export default function Home() {
               </Card>
               <Card className="border-border/50">
                 <CardContent className="p-4">
-                  <h3 className="text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
+                  <h3 className="font-display text-xs font-medium text-muted-foreground mb-3 flex items-center gap-1.5">
                     <Layers className="w-3.5 h-3.5" />
-                    Color Distribution
+                    Colors of the Host
                   </h3>
                   <ColorDistChart
                     data={
@@ -279,41 +245,68 @@ export default function Home() {
             </div>
 
             {/* AI Analysis */}
-            <Card className="border-border/50 analysis-glow">
+            <Card className="border-border/50 palantir-glow">
               <CardContent className="p-5">
-                <h3 className="text-xs font-medium text-muted-foreground mb-4 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
-                  AI Analysis
+                <h3 className="font-display text-xs font-medium text-muted-foreground mb-4 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-primary" />
+                  Counsel of the Stone
                 </h3>
                 <AnalysisView
                   content={currentAnalysis.analysis.analysisResult || ""}
                 />
               </CardContent>
             </Card>
+
+            {/* Flavor quote at bottom of analysis */}
+            <div className="text-center py-4">
+              <p className="text-xs text-muted-foreground/60 italic max-w-md mx-auto">
+                "{randomQuote.quote}"
+              </p>
+              <p className="text-[10px] text-muted-foreground/40 mt-1">
+                {randomQuote.attribution}
+              </p>
+            </div>
           </div>
         ) : (
           <>
             {/* Hero */}
             <div className="text-center mb-10 pt-4">
+              <PalantirLogo className="w-12 h-12 text-primary/60 mx-auto mb-4 palantir-pulse" />
               <h1
-                className="text-xl font-bold tracking-tight mb-2"
+                className="font-display text-xl font-bold tracking-wide mb-2"
                 data-testid="text-hero-title"
               >
-                Analyze Your Deck
+                Gaze Into the Stone
               </h1>
               <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Paste your decklist below. Get AI-powered strategic analysis,
-                mana curve breakdown, and optimization suggestions.
+                Present your forces to the palantír. Receive counsel on
+                strategy, hidden alliances, and reinforcements your army requires.
               </p>
             </div>
 
             {/* Input form */}
             <div className="max-w-2xl mx-auto space-y-5">
+              {/* Import options */}
+              <DeckImport
+                onImport={(data) => {
+                  if (data.deckName) setDeckName(data.deckName);
+                  if (data.format) setFormat(data.format);
+                  if (data.decklist) setDecklist(data.decklist);
+                }}
+              />
+
+              {/* Divider */}
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border/40" />
+                <span className="text-[10px] text-muted-foreground/50 uppercase tracking-widest">or inscribe manually</span>
+                <div className="h-px flex-1 bg-border/40" />
+              </div>
+
               {/* Deck name + format row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                    Deck Name
+                    Name of Your Host
                   </label>
                   <Input
                     placeholder="e.g. Burn, Dimir Control"
@@ -325,7 +318,7 @@ export default function Home() {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                    Format
+                    Theatre of War
                   </label>
                   <Select value={format} onValueChange={setFormat}>
                     <SelectTrigger
@@ -349,7 +342,10 @@ export default function Home() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-xs font-medium text-muted-foreground">
-                    Decklist
+                    Army Manifest
+                    <span className="ml-1.5 text-[10px] text-muted-foreground/50 font-normal">
+                      Arena format auto-detected
+                    </span>
                   </label>
                   <div className="flex items-center gap-3">
                     <button
@@ -357,17 +353,17 @@ export default function Home() {
                       className="text-xs text-primary hover:text-primary/80 transition-colors"
                       data-testid="button-load-sample"
                     >
-                      Load sample deck
+                      Summon sample host
                     </button>
                     {cardCount > 0 && (
                       <Badge variant="secondary" className="text-xs">
-                        {cardCount} cards
+                        {cardCount} souls
                       </Badge>
                     )}
                   </div>
                 </div>
                 <Textarea
-                  placeholder={`Paste your decklist here...\n\nFormat:\n4 Lightning Bolt\n4 Goblin Guide\n20 Mountain`}
+                  placeholder={`Inscribe your decklist here...\n\nFormat:\n4 Lightning Bolt\n4 Goblin Guide\n20 Mountain`}
                   value={decklist}
                   onChange={(e) => setDecklist(e.target.value)}
                   rows={14}
@@ -380,7 +376,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
                   <Coins className="w-3 h-3 inline mr-1" />
-                  Costs 1 coin per analysis ·{" "}
+                  1 Mithril Ring per vision ·{" "}
                   <span className="text-primary font-medium">
                     {creditsData?.coins ?? "..."} remaining
                   </span>
@@ -394,45 +390,57 @@ export default function Home() {
                   {analyzeMutation.isPending ? (
                     <>
                       <Loader2 className="w-4 h-4 animate-spin" />
-                      Analyzing...
+                      Consulting...
                     </>
                   ) : (
                     <>
-                      <Zap className="w-4 h-4" />
-                      Analyze Deck
+                      <Eye className="w-4 h-4" />
+                      Consult the Stone
                     </>
                   )}
                 </Button>
               </div>
 
-              {/* Format info */}
+              {/* Feature cards — war counsel themed */}
               <Card className="border-border/30 bg-muted/30">
                 <CardContent className="p-4">
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div>
-                      <Target className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
-                      <p className="text-xs font-medium">Card Validation</p>
+                      <Shield className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
+                      <p className="text-xs font-medium">Scryfall Verified</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Verified via Scryfall
+                        Every card confirmed
                       </p>
                     </div>
                     <div>
-                      <Sparkles className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
-                      <p className="text-xs font-medium">AI Strategy</p>
+                      <Eye className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
+                      <p className="text-xs font-medium">Deep Counsel</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Powered by Claude
+                        AI war-room analysis
                       </p>
                     </div>
                     <div>
-                      <BarChart3 className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
-                      <p className="text-xs font-medium">Curve Analysis</p>
+                      <Swords className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
+                      <p className="text-xs font-medium">Battle-Ready</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Mana & color stats
+                        Meta & combo intel
                       </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Lore easter egg — random age fact */}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <p className="text-center text-[10px] text-muted-foreground/30 italic cursor-default hover:text-muted-foreground/50 transition-colors">
+                    {emptyMsg}
+                  </p>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs">
+                  <p className="text-xs">{ageFact}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
           </>
         )}
@@ -442,7 +450,7 @@ export default function Home() {
       <footer className="border-t border-border/30 mt-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center">
           <p className="text-xs text-muted-foreground">
-            Arcane Study · Card data from{" "}
+            <span className="font-display">Ithil-stone</span> · Card data from{" "}
             <a
               href="https://scryfall.com"
               target="_blank"
@@ -452,6 +460,9 @@ export default function Home() {
               Scryfall
             </a>{" "}
             · Not affiliated with Wizards of the Coast
+          </p>
+          <p className="text-[10px] text-muted-foreground/30 mt-1 italic">
+            "{randomQuote.quote}" {randomQuote.attribution}
           </p>
         </div>
       </footer>

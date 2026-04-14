@@ -2,10 +2,39 @@ interface AnalysisViewProps {
   content: string;
 }
 
+// LOTR war-counsel section header mapping
+const SECTION_RENAMES: Record<string, string> = {
+  "Deck Archetype": "The Nature of Your Host",
+  "Power Assessment": "Strength of the Legion",
+  "Strengths": "Virtues of Your Vanguard",
+  "Weaknesses": "Shadows in the Ranks",
+  "Combo Discovery": "Hidden Alliances",
+  "Cards You're Missing": "Reinforcements Required",
+  "Meta Positioning": "Knowledge of the Enemy",
+  "Sideboard Guide": "Reserves of War",
+  "Upgrade Path": "The Forging of Stronger Arms",
+  "Mana Base Deep Dive": "The Foundations of Power",
+  "Key Synergies & Interactions": "Bonds of Fellowship",
+  "Key Synergies": "Bonds of Fellowship",
+  "Weakest Cards to Cut": "Soldiers Unfit for War",
+};
+
+function renameHeader(text: string): string {
+  // Check exact match first
+  if (SECTION_RENAMES[text]) return SECTION_RENAMES[text];
+  // Check partial match
+  for (const [key, val] of Object.entries(SECTION_RENAMES)) {
+    if (text.toLowerCase().includes(key.toLowerCase())) return val;
+  }
+  return text;
+}
+
 export default function AnalysisView({ content }: AnalysisViewProps) {
   if (!content) {
     return (
-      <p className="text-sm text-muted-foreground">No analysis available.</p>
+      <p className="text-sm text-muted-foreground italic">
+        The seeing-stone rests in silence. No counsel has been given.
+      </p>
     );
   }
 
@@ -22,27 +51,30 @@ export default function AnalysisView({ content }: AnalysisViewProps) {
 
         // H1 headers: # Title
         if (trimmed.startsWith("# ") && !trimmed.startsWith("## ")) {
+          const headerText = trimmed.replace(/^#\s+/, "");
           return (
-            <h2 key={i} className="text-base font-bold text-foreground pt-2 pb-1">
-              {trimmed.replace(/^#\s+/, "")}
+            <h2 key={i} className="font-display text-base font-bold text-foreground pt-2 pb-1">
+              {renameHeader(headerText)}
             </h2>
           );
         }
 
         // H2 headers: ## Section
         if (trimmed.startsWith("## ")) {
+          const headerText = trimmed.replace(/^##\s+/, "");
           return (
-            <h3 key={i} className="text-sm font-bold text-foreground pt-4 pb-1">
-              {trimmed.replace(/^##\s+/, "")}
+            <h3 key={i} className="font-display text-sm font-bold text-foreground pt-4 pb-1">
+              {renameHeader(headerText)}
             </h3>
           );
         }
 
         // H3 headers: ### Subsection
         if (trimmed.startsWith("### ")) {
+          const headerText = trimmed.replace(/^###\s+/, "");
           return (
-            <h4 key={i} className="text-sm font-semibold text-foreground pt-3 pb-0.5">
-              {trimmed.replace(/^###\s+/, "")}
+            <h4 key={i} className="font-display text-sm font-semibold text-foreground pt-3 pb-0.5">
+              {renameHeader(headerText)}
             </h4>
           );
         }
@@ -51,8 +83,8 @@ export default function AnalysisView({ content }: AnalysisViewProps) {
         if (/^\d+\.\s+\*\*/.test(trimmed) || /^\d+\.\s+[A-Z]/.test(trimmed)) {
           const cleaned = trimmed.replace(/^\d+\.\s*/, "").replace(/\*\*/g, "");
           return (
-            <h3 key={i} className="text-sm font-bold text-foreground pt-4 pb-1">
-              {cleaned}
+            <h3 key={i} className="font-display text-sm font-bold text-foreground pt-4 pb-1">
+              {renameHeader(cleaned)}
             </h3>
           );
         }
@@ -92,7 +124,7 @@ export default function AnalysisView({ content }: AnalysisViewProps) {
           return (
             <div key={i} className="flex gap-2 text-sm text-foreground/85 pl-2">
               <span className="text-primary/50 mt-0.5 shrink-0 select-none">
-                •
+                ◆
               </span>
               <span className="leading-relaxed">
                 {renderInlineMarkdown(bulletContent)}
@@ -135,7 +167,7 @@ export default function AnalysisView({ content }: AnalysisViewProps) {
             >
               {ratingMatch && (
                 <div className="text-center">
-                  <span className="text-3xl font-bold text-primary leading-none">
+                  <span className="font-display text-3xl font-bold text-primary leading-none">
                     {ratingMatch[1]}
                   </span>
                   <span className="text-sm text-muted-foreground">/10</span>
