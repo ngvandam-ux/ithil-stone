@@ -7,6 +7,7 @@ import {
   type InsertTransaction,
   type User,
   type MagicLink,
+  type AuthSession,
   type PromoCode,
   type PromoRedemption,
   analyses,
@@ -14,6 +15,7 @@ import {
   transactions,
   users,
   magicLinks,
+  authSessions,
   promoCodes,
   promoRedemptions,
 } from "@shared/schema";
@@ -76,6 +78,17 @@ try { sqlite.exec("ALTER TABLE analyses ADD COLUMN user_id TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE credits ADD COLUMN user_id TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE transactions ADD COLUMN user_id TEXT"); } catch {}
 
+// Auth sessions table (DB-persisted, survives redeploys)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS auth_sessions (
+    token TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+`);
+
 // Promo codes tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS promo_codes (
@@ -125,6 +138,12 @@ export interface IStorage {
 
   // Session → User migration
   migrateSessionToUser(sessionId: string, userId: string): Promise<void>;
+
+  // Auth sessions (DB-persisted)
+  createAuthSession(token: string, userId: string, email: string, expiresAt: string): Promise<AuthSession>;
+  getAuthSession(token: string): Promise<AuthSession | undefined>;
+  deleteAuthSession(token: string): Promise<void>;
+  cleanExpiredSessions(): Promise<void>;
 
   // Transactions
   createTransaction(tx: InsertTransaction): Promise<Transaction>;
@@ -280,6 +299,30 @@ export class DatabaseStorage implements IStorage {
       .set({ userId })
       .where(and(eq(transactions.sessionId, sessionId), eq(transactions.userId, null as any)))
       .run();
+  }
+
+  // ── Auth Sessions (DB-persisted) ─────────────────────────────────────
+  async createAuthSession(token: string, userId: string, email: string, expiresAt: string): Promise<AuthSession> {
+    return db.insert(authSessions).values({
+      token,
+      userId,
+      email,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+    }).returning().get();
+  }
+
+  async getAuthSession(token: string): Promise<AuthSession | undefined> {
+    return db.select().from(authSessions).where(eq(authSessions.token, token)).get();
+  }
+
+  async deleteAuthSession(token: string): Promise<void> {
+    db.delete(authSessions).where(eq(authSessions.token, token)).run();
+  }
+
+  async cleanExpiredSessions(): Promise<void> {
+    const now = new Date().toISOString();
+    sqlite.exec(`DELETE FROM auth_sessions WHERE expires_at < '${now}'`);
   }
 
   // ── Transactions ───────────────────────────────────────────────────

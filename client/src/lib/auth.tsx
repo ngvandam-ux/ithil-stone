@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import { getAuthToken, setAuthToken, clearAuthToken } from "./session";
+import { getAuthToken, setAuthToken, clearAuthToken, getSessionId } from "./session";
 
 interface User {
   id: string;
@@ -24,7 +24,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const token = getAuthToken();
     if (token) {
-      fetch("/api/auth/me")
+      fetch("/api/auth/me", {
+        headers: {
+          "x-auth-token": token,
+          "x-session-id": getSessionId(),
+        },
+      })
         .then((r) => r.json())
         .then((data) => {
           if (data.user) {
@@ -44,7 +49,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch("/api/auth/send-link", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-id": getSessionId(),
+        },
         body: JSON.stringify({ email }),
       });
       const data = await res.json();
@@ -59,7 +67,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const verifyToken = useCallback(async (token: string) => {
     try {
-      const res = await fetch(`/api/auth/verify?token=${token}`);
+      const res = await fetch(`/api/auth/verify?token=${token}`, {
+        headers: { "x-session-id": getSessionId() },
+      });
       const data = await res.json();
       if (!res.ok) {
         return { success: false, error: data.error || "Invalid link" };
@@ -73,8 +83,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    const token = getAuthToken();
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: token ? { "x-auth-token": token, "x-session-id": getSessionId() } : { "x-session-id": getSessionId() },
+      });
     } catch {}
     clearAuthToken();
     setUser(null);

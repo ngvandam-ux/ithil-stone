@@ -82,6 +82,17 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
 
+// ── Auth sessions table (DB-persisted) ──────────────────────────────
+export const authSessions = sqliteTable("auth_sessions", {
+  token: text("token").primaryKey(),
+  userId: text("user_id").notNull(),
+  email: text("email").notNull(),
+  expiresAt: text("expires_at").notNull(), // ISO string
+  createdAt: text("created_at").notNull(),
+});
+
+export type AuthSession = typeof authSessions.$inferSelect;
+
 // ── Promo codes table ────────────────────────────────────────────────
 export const promoCodes = sqliteTable("promo_codes", {
   id: integer("id").primaryKey({ autoIncrement: true }),

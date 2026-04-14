@@ -16,8 +16,7 @@ const resend = process.env.RESEND_API_KEY
 const APP_URL = process.env.APP_URL || "https://ithilstone.gg";
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
 
-// In-memory auth sessions: token → { userId, email, expiresAt }
-const authSessions = new Map<string, { userId: string; email: string; expiresAt: number }>();
+// Auth session duration: 30 days
 const AUTH_SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 function generateToken(): string {
@@ -719,16 +718,19 @@ export async function registerRoutes(
     if (!req.headers["x-session-id"]) {
       req.headers["x-session-id"] = randomUUID();
     }
-    // Resolve auth token → user
+    // Resolve auth token → user (DB-persisted sessions survive redeploys)
     const authToken = req.headers["x-auth-token"] as string | undefined;
     if (authToken) {
-      const session = authSessions.get(authToken);
-      if (session && session.expiresAt > Date.now()) {
-        (req as any).userId = session.userId;
-        (req as any).userEmail = session.email;
-      } else if (session) {
-        authSessions.delete(authToken); // expired
-      }
+      storage.getAuthSession(authToken).then((session) => {
+        if (session && new Date(session.expiresAt) > new Date()) {
+          (req as any).userId = session.userId;
+          (req as any).userEmail = session.email;
+        } else if (session) {
+          storage.deleteAuthSession(authToken); // expired
+        }
+        next();
+      }).catch(() => next());
+      return; // don't call next() synchronously
     }
     next();
   });
@@ -806,13 +808,10 @@ export async function registerRoutes(
         user = await storage.createUser(randomUUID(), link.email);
       }
 
-      // Create auth session
+      // Create auth session (DB-persisted — survives redeploys)
       const authToken = generateToken();
-      authSessions.set(authToken, {
-        userId: user.id,
-        email: user.email,
-        expiresAt: Date.now() + AUTH_SESSION_DURATION_MS,
-      });
+      const expiresAtSession = new Date(Date.now() + AUTH_SESSION_DURATION_MS).toISOString();
+      await storage.createAuthSession(authToken, user.id, user.email, expiresAtSession);
 
       // Migrate anonymous session data to user account
       const sessionId = req.headers["x-session-id"] as string;
@@ -845,13 +844,16 @@ export async function registerRoutes(
   });
 
   // ── Auth: Logout ───────────────────────────────────────────────
-  app.post("/api/auth/logout", (req, res) => {
+  app.post("/api/auth/logout", async (req, res) => {
     const authToken = req.headers["x-auth-token"] as string | undefined;
     if (authToken) {
-      authSessions.delete(authToken);
+      await storage.deleteAuthSession(authToken);
     }
     res.json({ success: true });
   });
+
+  // Clean expired sessions periodically (every hour)
+  setInterval(() => storage.cleanExpiredSessions(), 60 * 60 * 1000);
 
   // ── Credits (user-aware) ───────────────────────────────────────
   app.get("/api/credits", async (req, res) => {
