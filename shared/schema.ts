@@ -82,6 +82,30 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
 
+// ── Promo codes table ────────────────────────────────────────────────
+export const promoCodes = sqliteTable("promo_codes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  code: text("code").notNull().unique(),
+  rings: integer("rings").notNull(),
+  maxUses: integer("max_uses").notNull().default(1),
+  currentUses: integer("current_uses").notNull().default(0),
+  expiresAt: text("expires_at"), // null = never expires
+  createdAt: text("created_at").notNull(),
+});
+
+export type PromoCode = typeof promoCodes.$inferSelect;
+
+// ── Promo redemptions table ─────────────────────────────────────────
+export const promoRedemptions = sqliteTable("promo_redemptions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  promoCodeId: integer("promo_code_id").notNull(),
+  userId: text("user_id"),
+  sessionId: text("session_id").notNull(),
+  redeemedAt: text("redeemed_at").notNull(),
+});
+
+export type PromoRedemption = typeof promoRedemptions.$inferSelect;
+
 // ── Validation schemas ───────────────────────────────────────────────
 export const deckSubmitSchema = z.object({
   deckName: z.string().min(1, "Deck name is required").max(100),

@@ -167,7 +167,7 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
   );
   const [quoteKey, setQuoteKey] = useState(0);
 
-  // Cycle quotes every 6s
+  // Cycle quotes every 12s — unhurried, let the reader dwell
   const cycleQuote = useCallback(() => {
     setCurrentQuote(ELVISH_QUOTES[Math.floor(Math.random() * ELVISH_QUOTES.length)]);
     setQuoteKey((k) => k + 1);
@@ -175,16 +175,16 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
 
   useEffect(() => {
     if (!visible) return;
-    const interval = setInterval(cycleQuote, 6000);
+    const interval = setInterval(cycleQuote, 12000);
     return () => clearInterval(interval);
   }, [visible, cycleQuote]);
 
-  // Cycle status messages every 3s
+  // Cycle status messages every 5s
   useEffect(() => {
     if (!visible) return;
     const interval = setInterval(() => {
       setStatusMsg(STATUS_MESSAGES[Math.floor(Math.random() * STATUS_MESSAGES.length)]);
-    }, 3000);
+    }, 5000);
     return () => clearInterval(interval);
   }, [visible]);
 

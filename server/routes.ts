@@ -1152,7 +1152,7 @@ export async function registerRoutes(
   app.use("/api/admin", (req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-admin-secret");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     if (req.method === "OPTIONS") return res.sendStatus(200);
     next();
   });
@@ -1187,6 +1187,84 @@ export async function registerRoutes(
   app.get("/api/admin/credits", requireAdmin, async (_req, res) => {
     const allCredits = db.select().from(creditsTable).all();
     res.json(allCredits);
+  });
+
+  // Admin: Grant rings to a user by email
+  app.post("/api/admin/grant-rings", requireAdmin, async (req, res) => {
+    try {
+      const { email, amount } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email required" });
+      }
+      if (!amount || typeof amount !== "number" || amount <= 0 || amount > 1000) {
+        return res.status(400).json({ error: "Amount must be between 1 and 1000" });
+      }
+      const result = await storage.grantRingsByEmail(email, amount);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+      res.json({ success: true, email, amount, newBalance: result.newBalance });
+    } catch (err: any) {
+      console.error("Grant rings error:", err);
+      res.status(500).json({ error: "Failed to grant rings" });
+    }
+  });
+
+  // Admin: Create promo code
+  app.post("/api/admin/promo-codes", requireAdmin, async (req, res) => {
+    try {
+      const { code, rings, maxUses, expiresAt } = req.body;
+      if (!code || typeof code !== "string" || code.length < 3) {
+        return res.status(400).json({ error: "Code must be at least 3 characters" });
+      }
+      if (!rings || typeof rings !== "number" || rings <= 0 || rings > 1000) {
+        return res.status(400).json({ error: "Rings must be between 1 and 1000" });
+      }
+      const max = maxUses && typeof maxUses === "number" ? maxUses : 1;
+      const promo = await storage.createPromoCode(code, rings, max, expiresAt);
+      res.json(promo);
+    } catch (err: any) {
+      if (err.message?.includes("UNIQUE")) {
+        return res.status(400).json({ error: "A code with this name already exists" });
+      }
+      console.error("Create promo code error:", err);
+      res.status(500).json({ error: "Failed to create promo code" });
+    }
+  });
+
+  // Admin: List all promo codes
+  app.get("/api/admin/promo-codes", requireAdmin, async (_req, res) => {
+    const codes = await storage.getAllPromoCodes();
+    res.json(codes);
+  });
+
+  // Admin: Delete promo code
+  app.delete("/api/admin/promo-codes/:id", requireAdmin, async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+    await storage.deletePromoCode(id);
+    res.json({ success: true });
+  });
+
+  // ── Public: Redeem promo code (used from the main site) ───────────
+  app.post("/api/promo/redeem", async (req, res) => {
+    try {
+      const { code } = req.body;
+      if (!code || typeof code !== "string") {
+        return res.status(400).json({ error: "Promo code required" });
+      }
+      const sessionId = req.headers["x-session-id"] as string;
+      const userId = (req as any).userId as string | undefined;
+      const result = await storage.redeemPromoCode(code, sessionId, userId);
+      if (!result.success) {
+        return res.status(400).json({ error: result.error });
+      }
+      const credit = await storage.getCredits(sessionId);
+      res.json({ success: true, ringsGranted: result.rings, newBalance: credit?.coins ?? 0 });
+    } catch (err: any) {
+      console.error("Redeem promo error:", err);
+      res.status(500).json({ error: "Failed to redeem code" });
+    }
   });
 
   // Admin: Dashboard stats

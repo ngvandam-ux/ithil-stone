@@ -7,11 +7,15 @@ import {
   type InsertTransaction,
   type User,
   type MagicLink,
+  type PromoCode,
+  type PromoRedemption,
   analyses,
   credits,
   transactions,
   users,
   magicLinks,
+  promoCodes,
+  promoRedemptions,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -71,6 +75,26 @@ sqlite.exec(`
 try { sqlite.exec("ALTER TABLE analyses ADD COLUMN user_id TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE credits ADD COLUMN user_id TEXT"); } catch {}
 try { sqlite.exec("ALTER TABLE transactions ADD COLUMN user_id TEXT"); } catch {}
+
+// Promo codes tables
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS promo_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT NOT NULL UNIQUE,
+    rings INTEGER NOT NULL,
+    max_uses INTEGER NOT NULL DEFAULT 1,
+    current_uses INTEGER NOT NULL DEFAULT 0,
+    expires_at TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS promo_redemptions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    promo_code_id INTEGER NOT NULL,
+    user_id TEXT,
+    session_id TEXT NOT NULL,
+    redeemed_at TEXT NOT NULL
+  );
+`);
 
 export const db = drizzle(sqlite);
 
@@ -288,6 +312,91 @@ export class DatabaseStorage implements IStorage {
       .set(updates)
       .where(eq(transactions.id, id))
       .run();
+  }
+
+  // ── Promo Codes ─────────────────────────────────────────────────────
+  async createPromoCode(code: string, rings: number, maxUses: number, expiresAt?: string): Promise<PromoCode> {
+    return db
+      .insert(promoCodes)
+      .values({
+        code: code.toUpperCase(),
+        rings,
+        maxUses,
+        currentUses: 0,
+        expiresAt: expiresAt ?? null,
+        createdAt: new Date().toISOString(),
+      })
+      .returning()
+      .get();
+  }
+
+  async getPromoCode(code: string): Promise<PromoCode | undefined> {
+    return db.select().from(promoCodes).where(eq(promoCodes.code, code.toUpperCase())).get();
+  }
+
+  async getAllPromoCodes(): Promise<PromoCode[]> {
+    return db.select().from(promoCodes).orderBy(desc(promoCodes.id)).all();
+  }
+
+  async deletePromoCode(id: number): Promise<void> {
+    db.delete(promoCodes).where(eq(promoCodes.id, id)).run();
+  }
+
+  async redeemPromoCode(code: string, sessionId: string, userId?: string): Promise<{ success: boolean; rings: number; error?: string }> {
+    const promo = await this.getPromoCode(code);
+    if (!promo) return { success: false, rings: 0, error: "Invalid promo code" };
+    if (promo.currentUses >= promo.maxUses) return { success: false, rings: 0, error: "This code has been fully redeemed" };
+    if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return { success: false, rings: 0, error: "This code has expired" };
+
+    // Check if this session/user already redeemed this code
+    const existing = db.select().from(promoRedemptions)
+      .where(and(
+        eq(promoRedemptions.promoCodeId, promo.id),
+        or(
+          eq(promoRedemptions.sessionId, sessionId),
+          userId ? eq(promoRedemptions.userId, userId) : undefined as any
+        )
+      )).get();
+    if (existing) return { success: false, rings: 0, error: "You have already redeemed this code" };
+
+    // Increment usage
+    db.update(promoCodes)
+      .set({ currentUses: promo.currentUses + 1 })
+      .where(eq(promoCodes.id, promo.id))
+      .run();
+
+    // Record redemption
+    db.insert(promoRedemptions)
+      .values({
+        promoCodeId: promo.id,
+        userId: userId ?? null,
+        sessionId,
+        redeemedAt: new Date().toISOString(),
+      })
+      .run();
+
+    // Credit the rings
+    await this.addCoins(sessionId, promo.rings);
+
+    return { success: true, rings: promo.rings };
+  }
+
+  // ── Admin: Grant rings directly to a user by email ──────────────────
+  async grantRingsByEmail(email: string, amount: number): Promise<{ success: boolean; error?: string; newBalance?: number }> {
+    const user = await this.getUserByEmail(email.toLowerCase().trim());
+    if (!user) return { success: false, error: "User not found" };
+
+    // Find the user's credit record
+    const credit = db.select().from(credits).where(eq(credits.userId, user.id)).get();
+    if (!credit) return { success: false, error: "User has no credit record (haven't visited the site yet)" };
+
+    const newBalance = credit.coins + amount;
+    db.update(credits)
+      .set({ coins: newBalance })
+      .where(eq(credits.id, credit.id))
+      .run();
+
+    return { success: true, newBalance };
   }
 }
 
