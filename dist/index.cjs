@@ -282,11 +282,12 @@ Total deck price is ~$${n.totalPrice}. Provide a clear upgrade roadmap:
 
 CRITICAL FORMAT RULES:
 - You MUST complete ALL sections above. Do NOT stop early or skip sections.
+- **EVERY card name MUST be wrapped in bold markdown** using **Card Name** syntax. This includes cards already in the deck, suggested cards, sideboard cards, cards mentioned in matchups \u2014 ALL of them, every single time. For example: write **Fatal Push**, not Fatal Push. Write **Lightning Bolt**, not Lightning Bolt. This is essential for the UI to render card images.
 - Keep Strengths, Weaknesses, and Mana Base sections concise (2-3 sentences each bullet, no multi-paragraph explanations).
 - Key Synergies: 1-2 sentences per synergy. Don't over-explain obvious interactions.
 - Pour your depth into Combo Discovery, Cards You're Missing, and Meta Positioning \u2014 these are the signature value.
 - Every card you suggest MUST be legal in ${t}. Double-check legality before recommending.
-- Name real, specific cards \u2014 never say "a removal spell" when you can say "Fatal Push" or "Lightning Bolt".
+- Name real, specific cards \u2014 never say "a removal spell" when you can say **Fatal Push** or **Lightning Bolt**.
 - Reference actual ${t} tournament results and meta positions where relevant.
 - Write for an experienced player who wants actionable insights they haven't thought of, not generic advice they already know.
 - Target approximately 4000 words total. Complete every section.`;try{return(await new b4.default().messages.create({model:"claude-opus-4-6",max_tokens:16384,messages:[{role:"user",content:d}]})).content.find(g=>g.type==="text")?.text||g4(e,t,r,n)}catch(p){return console.error("AI analysis failed:",p),g4(e,t,r,n)}}function g4(e,t,r,n){let i=Object.entries(n.colorDistribution).filter(([,s])=>s>0).map(([s,o])=>`${s}: ${o}`).join(", "),a=(n.landCount/n.totalCards*100).toFixed(1);return`## ${e} \u2014 ${t.charAt(0).toUpperCase()+t.slice(1)} Analysis

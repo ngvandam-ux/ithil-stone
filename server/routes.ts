@@ -435,11 +435,12 @@ Total deck price is ~$${stats.totalPrice}. Provide a clear upgrade roadmap:
 
 CRITICAL FORMAT RULES:
 - You MUST complete ALL sections above. Do NOT stop early or skip sections.
+- **EVERY card name MUST be wrapped in bold markdown** using **Card Name** syntax. This includes cards already in the deck, suggested cards, sideboard cards, cards mentioned in matchups — ALL of them, every single time. For example: write **Fatal Push**, not Fatal Push. Write **Lightning Bolt**, not Lightning Bolt. This is essential for the UI to render card images.
 - Keep Strengths, Weaknesses, and Mana Base sections concise (2-3 sentences each bullet, no multi-paragraph explanations).
 - Key Synergies: 1-2 sentences per synergy. Don't over-explain obvious interactions.
 - Pour your depth into Combo Discovery, Cards You're Missing, and Meta Positioning — these are the signature value.
 - Every card you suggest MUST be legal in ${format}. Double-check legality before recommending.
-- Name real, specific cards — never say "a removal spell" when you can say "Fatal Push" or "Lightning Bolt".
+- Name real, specific cards — never say "a removal spell" when you can say **Fatal Push** or **Lightning Bolt**.
 - Reference actual ${format} tournament results and meta positions where relevant.
 - Write for an experienced player who wants actionable insights they haven't thought of, not generic advice they already know.
 - Target approximately 4000 words total. Complete every section.`;
