@@ -236,7 +236,7 @@
   100% { opacity: 0; transform: translateY(-6px); }
 }
 .quote-cycle {
-  animation: quote-fade 12s ease-in-out;
+  animation: quote-fade 17s ease-in-out;
 }
 
 /* Background artwork fade for loading overlay */

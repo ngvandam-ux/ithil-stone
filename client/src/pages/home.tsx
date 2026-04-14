@@ -283,7 +283,7 @@ export default function Home() {
               <img
                 src="/art/tolkien-gandalf-counsel.jpg"
                 alt=""
-                className="w-full h-12 object-cover object-center opacity-[0.07] dark:opacity-[0.1] dark:invert-0 invert"
+                className="w-full h-12 object-cover object-center opacity-[0.14] dark:opacity-[0.2] dark:invert-0 invert"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
               <div className="absolute inset-0 flex items-center justify-center gap-1.5">
@@ -318,7 +318,7 @@ export default function Home() {
                 <img
                   src={heroArt.src}
                   alt=""
-                  className="w-full h-full object-cover object-center opacity-[0.06] dark:opacity-[0.08] dark:invert-0 invert"
+                  className="w-full h-full object-cover object-center opacity-[0.12] dark:opacity-[0.18] dark:invert-0 invert"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
               </div>
@@ -492,7 +492,7 @@ export default function Home() {
                 <img
                   src={sectionArt[0].src}
                   alt=""
-                  className="w-full h-16 object-cover object-center opacity-[0.07] dark:opacity-[0.1] dark:invert-0 invert"
+                  className="w-full h-16 object-cover object-center opacity-[0.14] dark:opacity-[0.2] dark:invert-0 invert"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -533,7 +533,7 @@ export default function Home() {
                 <img
                   src={sectionArt[1].src}
                   alt=""
-                  className="w-full h-16 object-cover object-center opacity-[0.07] dark:opacity-[0.1] dark:invert-0 invert"
+                  className="w-full h-16 object-cover object-center opacity-[0.14] dark:opacity-[0.2] dark:invert-0 invert"
                 />
                 <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -566,7 +566,7 @@ export default function Home() {
           <img
             src={sectionArt[2].src}
             alt=""
-            className="w-full h-full object-cover object-center opacity-[0.04] dark:opacity-[0.06] dark:invert-0 invert"
+            className="w-full h-full object-cover object-center opacity-[0.10] dark:opacity-[0.14] dark:invert-0 invert"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-background/70" />
         </div>

@@ -198,7 +198,7 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
 
   useEffect(() => {
     if (!visible) return;
-    const interval = setInterval(cycleQuote, 12000);
+    const interval = setInterval(cycleQuote, 17000);
     return () => clearInterval(interval);
   }, [visible, cycleQuote]);
 
@@ -239,7 +239,7 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
             alt=""
             onLoad={() => setImgLoaded(true)}
             className={`w-full h-full object-cover object-center transition-opacity duration-[2000ms] dark:invert-0 invert ${
-              imgLoaded ? "opacity-[0.08]" : "opacity-0"
+              imgLoaded ? "opacity-[0.18]" : "opacity-0"
             }`}
           />
           {/* Gradient vignette overlay for readability */}
