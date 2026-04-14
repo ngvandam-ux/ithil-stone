@@ -752,18 +752,40 @@ export async function registerRoutes(
       const magicUrl = `${APP_URL}/#/auth/verify/${token}`;
 
       if (resend) {
+        // Pick a random artwork for the email
+        const emailArt = [
+          { img: "tolkien-palantir.jpg", quote: "The palant\u00EDri are not all accounted for. We do not know who else may be watching.", attr: "Gandalf" },
+          { img: "tolkien-gandalf-counsel.jpg", quote: "He that breaks a thing to find out what it is has left the path of wisdom.", attr: "Gandalf" },
+          { img: "tolkien-star-hope.jpg", quote: "There, peeping among the cloud-wrack, Sam saw a white star twinkle for a while.", attr: "The Return of the King" },
+          { img: "tolkien-sword-reforged.jpg", quote: "Renewed shall be blade that was broken, the crownless again shall be king.", attr: "The Riddle of Strider" },
+          { img: "tolkien-fellowship-road.jpg", quote: "Faithless is he that says farewell when the road darkens.", attr: "Gimli" },
+        ];
+        const chosen = emailArt[Math.floor(Math.random() * emailArt.length)];
+        const artUrl = `${APP_URL}/art/${chosen.img}`;
+
         await resend.emails.send({
           from: "Ithil-stone <noreply@ithilstone.gg>",
           to: normalizedEmail,
           subject: "Your key to the seeing-stone",
           html: `
-            <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0a0f0a; color: #c8cfc8; border-radius: 12px;">
-              <h1 style="color: #4ade80; font-size: 20px; margin-bottom: 8px; font-variant: small-caps; letter-spacing: 1px;">Ithil-stone</h1>
-              <p style="color: #8a9a8a; font-size: 13px; margin-bottom: 24px;">AI-Powered MTG Deck Analysis</p>
-              <p style="font-size: 15px; line-height: 1.6;">A request has been made to access the seeing-stone. Click below to enter:</p>
-              <a href="${magicUrl}" style="display: inline-block; margin: 24px 0; padding: 14px 32px; background: #166534; color: #fff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; letter-spacing: 0.5px;">Enter the Stone</a>
-              <p style="font-size: 13px; color: #5a6a5a; margin-top: 24px;">This link expires in ${MAGIC_LINK_EXPIRY_MINUTES} minutes. If you did not request this, you may safely ignore it.</p>
-              <p style="font-size: 12px; color: #3a4a3a; margin-top: 32px; font-style: italic;">"The palant\u00EDri are not all accounted for. We do not know who else may be watching."</p>
+            <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 480px; margin: 0 auto; background: #0a0f0a; color: #c8cfc8; border-radius: 12px; overflow: hidden;">
+              <div style="position: relative; height: 120px; overflow: hidden;">
+                <img src="${artUrl}" alt="" style="width: 100%; height: 120px; object-fit: cover; opacity: 0.15; filter: brightness(1.2);" />
+                <div style="position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,15,10,0.3), rgba(10,15,10,0.95));"></div>
+                <div style="position: absolute; bottom: 16px; left: 32px; right: 32px;">
+                  <h1 style="color: #4ade80; font-size: 20px; margin: 0; font-variant: small-caps; letter-spacing: 1px;">Ithil-stone</h1>
+                  <p style="color: #8a9a8a; font-size: 13px; margin: 4px 0 0 0;">AI-Powered MTG Deck Analysis</p>
+                </div>
+              </div>
+              <div style="padding: 24px 32px 32px;">
+                <p style="font-size: 15px; line-height: 1.6; margin-top: 0;">A request has been made to access the seeing-stone. Click below to enter:</p>
+                <a href="${magicUrl}" style="display: inline-block; margin: 24px 0; padding: 14px 32px; background: #166534; color: #fff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; letter-spacing: 0.5px;">Enter the Stone</a>
+                <p style="font-size: 13px; color: #5a6a5a; margin-top: 24px;">This link expires in ${MAGIC_LINK_EXPIRY_MINUTES} minutes. If you did not request this, you may safely ignore it.</p>
+                <div style="margin-top: 28px; padding-top: 16px; border-top: 1px solid rgba(74,222,128,0.1);">
+                  <p style="font-size: 12px; color: #3a4a3a; font-style: italic; margin: 0;">"${chosen.quote}"</p>
+                  <p style="font-size: 11px; color: #2a3a2a; margin: 4px 0 0 0;">\u2014 ${chosen.attr}</p>
+                </div>
+              </div>
             </div>
           `,
         });

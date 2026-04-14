@@ -42,6 +42,19 @@ import LoadingOverlay from "@/components/loading-overlay";
 
 // ── LOTR lore data ──────────────────────────────────────────────────
 
+// Artwork + quote pairs for landing page sections
+const SECTION_ART = [
+  { src: "/art/tolkien-palantir.jpg", quote: "The palantíri are not all accounted for. We do not know who else may be watching.", attribution: "Gandalf" },
+  { src: "/art/tolkien-gandalf-counsel.jpg", quote: "He that breaks a thing to find out what it is has left the path of wisdom.", attribution: "Gandalf" },
+  { src: "/art/tolkien-fellowship-road.jpg", quote: "Faithless is he that says farewell when the road darkens.", attribution: "Gimli" },
+  { src: "/art/tolkien-mordor-fortress.jpg", quote: "His dominion was torment.", attribution: "The Silmarillion" },
+  { src: "/art/tolkien-star-hope.jpg", quote: "There, peeping among the cloud-wrack, Sam saw a white star twinkle for a while.", attribution: "The Return of the King" },
+  { src: "/art/tolkien-sword-reforged.jpg", quote: "Renewed shall be blade that was broken, the crownless again shall be king.", attribution: "The Riddle of Strider" },
+  { src: "/art/tolkien-fingolfin-morgoth.jpg", quote: "Fingolfin gleamed beneath him as a star.", attribution: "The Silmarillion" },
+  { src: "/art/tolkien-rohirrim-charge.jpg", quote: "A sword-day, a red day, ere the sun rises!", attribution: "Théoden" },
+  { src: "/art/tolkien-duel-of-songs.jpg", quote: "Backwards and forwards swayed their song.", attribution: "The Lay of Leithian" },
+  { src: "/art/tolkien-feanor-oath.jpg", quote: "Eru has set in me a fire greater than thou knowest.", attribution: "Fëanor" },
+];
 
 const FLAVOR_QUOTES = [
   { quote: "He that breaks a thing to find out what it is has left the path of wisdom.", attribution: "— Gandalf" },
@@ -125,6 +138,13 @@ export default function Home() {
   const [randomQuote] = useState(() => FLAVOR_QUOTES[Math.floor(Math.random() * FLAVOR_QUOTES.length)]);
   const [emptyMsg] = useState(() => EMPTY_STATE_MESSAGES[Math.floor(Math.random() * EMPTY_STATE_MESSAGES.length)]);
   const [ageFact] = useState(() => AGE_FACTS[Math.floor(Math.random() * AGE_FACTS.length)]);
+  // Pick 3 random section artworks for dividers (stable per session)
+  const [sectionArt] = useState(() => {
+    const shuffled = [...SECTION_ART].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3);
+  });
+  // Hero artwork — palantír is the thematic anchor
+  const [heroArt] = useState(() => SECTION_ART[0]);
 
   // Fetch credits
   const { data: creditsData } = useQuery<{ coins: number }>({
@@ -258,14 +278,18 @@ export default function Home() {
               </Card>
             </div>
 
-            {/* Section divider */}
-            <div className="flex items-center gap-3 pt-1">
-              <div className="h-px flex-1 bg-border/30" />
-              <div className="flex items-center gap-1.5 text-muted-foreground/50">
+            {/* Section divider with artwork strip */}
+            <div className="relative rounded-lg overflow-hidden">
+              <img
+                src="/art/tolkien-gandalf-counsel.jpg"
+                alt=""
+                className="w-full h-12 object-cover object-center opacity-[0.07] dark:opacity-[0.1] dark:invert-0 invert"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
+              <div className="absolute inset-0 flex items-center justify-center gap-1.5">
                 <Eye className="w-3.5 h-3.5 text-primary/50" />
-                <span className="text-[10px] uppercase tracking-[0.15em] font-medium">Counsel of the Stone</span>
+                <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-muted-foreground/50">Counsel of the Stone</span>
               </div>
-              <div className="h-px flex-1 bg-border/30" />
             </div>
 
             {/* AI Analysis — collapsible sections */}
@@ -287,23 +311,34 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* Hero */}
-            <div className="text-center mb-10 pt-4">
-              <PalantirLogo className="w-12 h-12 text-primary/60 mx-auto mb-4 palantir-pulse" />
-              <h1
-                className="font-display text-xl font-bold tracking-wide mb-2"
-                data-testid="text-hero-title"
-              >
-                AI-Powered MTG Deck Analysis
-              </h1>
-              <p className="text-sm text-muted-foreground max-w-lg mx-auto">
-                Paste your Magic: The Gathering decklist. The seeing stone reveals
-                hidden combos, optimal card swaps, mana base fixes, and meta positioning
-                across Standard, Modern, Pioneer, Legacy, and Commander.
-              </p>
-              <p className="text-xs text-muted-foreground/50 mt-2">
-                3 free analyses per session · All MTG formats supported
-              </p>
+            {/* Hero with artwork backdrop */}
+            <div className="relative text-center mb-10 pt-4 overflow-hidden rounded-xl">
+              {/* Artwork background */}
+              <div className="absolute inset-0 -z-10">
+                <img
+                  src={heroArt.src}
+                  alt=""
+                  className="w-full h-full object-cover object-center opacity-[0.06] dark:opacity-[0.08] dark:invert-0 invert"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
+              </div>
+              <div className="py-6">
+                <PalantirLogo className="w-12 h-12 text-primary/60 mx-auto mb-4 palantir-pulse" />
+                <h1
+                  className="font-display text-xl font-bold tracking-wide mb-2"
+                  data-testid="text-hero-title"
+                >
+                  AI-Powered MTG Deck Analysis
+                </h1>
+                <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+                  Paste your Magic: The Gathering decklist. The seeing stone reveals
+                  hidden combos, optimal card swaps, mana base fixes, and meta positioning
+                  across Standard, Modern, Pioneer, Legacy, and Commander.
+                </p>
+                <p className="text-xs text-muted-foreground/50 mt-2">
+                  3 free analyses per session · All MTG formats supported
+                </p>
+              </div>
             </div>
 
             {/* Input form */}
@@ -452,6 +487,21 @@ export default function Home() {
                 </CardContent>
               </Card>
 
+              {/* Artwork divider 1 */}
+              <div className="relative rounded-lg overflow-hidden my-4">
+                <img
+                  src={sectionArt[0].src}
+                  alt=""
+                  className="w-full h-16 object-cover object-center opacity-[0.07] dark:opacity-[0.1] dark:invert-0 invert"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="font-elvish text-[11px] text-muted-foreground/40 italic">
+                    "{sectionArt[0].quote}" <span className="text-muted-foreground/25">— {sectionArt[0].attribution}</span>
+                  </p>
+                </div>
+              </div>
+
               {/* What you get — SEO-rich content section */}
               <div className="border-t border-border/20 pt-6 mt-2">
                 <h2 className="font-display text-sm font-semibold text-center mb-4">What the Stone Reveals</h2>
@@ -478,6 +528,21 @@ export default function Home() {
                 </p>
               </div>
 
+              {/* Artwork divider 2 */}
+              <div className="relative rounded-lg overflow-hidden my-2">
+                <img
+                  src={sectionArt[1].src}
+                  alt=""
+                  className="w-full h-16 object-cover object-center opacity-[0.07] dark:opacity-[0.1] dark:invert-0 invert"
+                />
+                <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <p className="font-elvish text-[11px] text-muted-foreground/40 italic">
+                    "{sectionArt[1].quote}" <span className="text-muted-foreground/25">— {sectionArt[1].attribution}</span>
+                  </p>
+                </div>
+              </div>
+
               {/* Lore easter egg — random age fact */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -495,7 +560,16 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-border/30 mt-16">
+      <footer className="relative border-t border-border/30 mt-16 overflow-hidden">
+        {/* Subtle artwork atmosphere behind footer */}
+        <div className="absolute inset-0 -z-10">
+          <img
+            src={sectionArt[2].src}
+            alt=""
+            className="w-full h-full object-cover object-center opacity-[0.04] dark:opacity-[0.06] dark:invert-0 invert"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-background/70" />
+        </div>
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center space-y-2">
           <p className="text-xs text-muted-foreground">
             <span className="font-display">Ithil-stone</span> — AI-Powered Magic: The Gathering Deck Analyzer
