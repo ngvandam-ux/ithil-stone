@@ -227,7 +227,7 @@ CRITICAL FORMAT RULES:
 - Name real, specific cards \u2014 never say "a removal spell" when you can say "Fatal Push" or "Lightning Bolt".
 - Reference actual ${e} tournament results and meta positions where relevant.
 - Write for an experienced player who wants actionable insights they haven't thought of, not generic advice they already know.
-- Target approximately 4000 words total. Complete every section.`;try{return(await new vg.default().messages.create({model:"claude_sonnet_4_6",max_tokens:8192,messages:[{role:"user",content:d}]})).content.find(h=>h.type==="text")?.text||dg(t,e,n,r)}catch(p){return console.error("AI analysis failed:",p),dg(t,e,n,r)}}function dg(t,e,n,r){let a=Object.entries(r.colorDistribution).filter(([,s])=>s>0).map(([s,o])=>`${s}: ${o}`).join(", "),i=(r.landCount/r.totalCards*100).toFixed(1);return`## ${t} \u2014 ${e.charAt(0).toUpperCase()+e.slice(1)} Analysis
+- Target approximately 4000 words total. Complete every section.`;try{return(await new vg.default().messages.create({model:"claude-sonnet-4-20250514",max_tokens:8192,messages:[{role:"user",content:d}]})).content.find(h=>h.type==="text")?.text||dg(t,e,n,r)}catch(p){return console.error("AI analysis failed:",p),dg(t,e,n,r)}}function dg(t,e,n,r){let a=Object.entries(r.colorDistribution).filter(([,s])=>s>0).map(([s,o])=>`${s}: ${o}`).join(", "),i=(r.landCount/r.totalCards*100).toFixed(1);return`## ${t} \u2014 ${e.charAt(0).toUpperCase()+e.slice(1)} Analysis
 
 **Deck Overview:** ${r.totalCards} cards across ${n.length} unique cards. Average CMC: ${r.avgCmc}. Color distribution: ${a}.
 
