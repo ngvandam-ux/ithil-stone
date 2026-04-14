@@ -494,14 +494,15 @@ export default function Home() {
                 <img
                   src={sectionArt[0].src}
                   alt=""
-                  className="w-full h-24 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
+                  className="w-full h-28 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/40 to-background/80" />
-                <div className="absolute inset-0 flex items-center justify-center px-4">
-                  <div className="bg-background/60 backdrop-blur-sm rounded-md px-4 py-1.5">
-                    <p className="font-elvish text-xs text-foreground/70 italic text-center">
-                      "{sectionArt[0].quote}" <span className="text-foreground/40">— {sectionArt[0].attribution}</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-background/70 via-background/30 to-background/70" />
+                <div className="absolute inset-0 flex items-center justify-center px-6">
+                  <div className="bg-background/70 backdrop-blur-md rounded-lg px-6 py-2.5">
+                    <p className="font-elvish text-sm sm:text-base text-foreground/80 italic text-center leading-relaxed">
+                      "{sectionArt[0].quote}"
                     </p>
+                    <p className="font-elvish text-xs text-foreground/40 text-center mt-1">— {sectionArt[0].attribution}</p>
                   </div>
                 </div>
               </div>
@@ -537,14 +538,15 @@ export default function Home() {
                 <img
                   src={sectionArt[1].src}
                   alt=""
-                  className="w-full h-24 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
+                  className="w-full h-28 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/40 to-background/80" />
-                <div className="absolute inset-0 flex items-center justify-center px-4">
-                  <div className="bg-background/60 backdrop-blur-sm rounded-md px-4 py-1.5">
-                    <p className="font-elvish text-xs text-foreground/70 italic text-center">
-                      "{sectionArt[1].quote}" <span className="text-foreground/40">— {sectionArt[1].attribution}</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-background/70 via-background/30 to-background/70" />
+                <div className="absolute inset-0 flex items-center justify-center px-6">
+                  <div className="bg-background/70 backdrop-blur-md rounded-lg px-6 py-2.5">
+                    <p className="font-elvish text-sm sm:text-base text-foreground/80 italic text-center leading-relaxed">
+                      "{sectionArt[1].quote}"
                     </p>
+                    <p className="font-elvish text-xs text-foreground/40 text-center mt-1">— {sectionArt[1].attribution}</p>
                   </div>
                 </div>
               </div>
