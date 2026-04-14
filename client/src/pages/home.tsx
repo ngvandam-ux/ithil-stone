@@ -283,12 +283,14 @@ export default function Home() {
               <img
                 src="/art/tolkien-gandalf-counsel.jpg"
                 alt=""
-                className="w-full h-12 object-cover object-center opacity-[0.14] dark:opacity-[0.2] dark:invert-0 invert"
+                className="w-full h-16 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
               />
-              <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
+              <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/40 to-background/80" />
               <div className="absolute inset-0 flex items-center justify-center gap-1.5">
-                <Eye className="w-3.5 h-3.5 text-primary/50" />
-                <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-muted-foreground/50">Counsel of the Stone</span>
+                <div className="bg-background/60 backdrop-blur-sm rounded-md px-4 py-1 flex items-center gap-1.5">
+                  <Eye className="w-3.5 h-3.5 text-primary/60" />
+                  <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-foreground/60">Counsel of the Stone</span>
+                </div>
               </div>
             </div>
 
@@ -318,7 +320,7 @@ export default function Home() {
                 <img
                   src={heroArt.src}
                   alt=""
-                  className="w-full h-full object-cover object-center opacity-[0.12] dark:opacity-[0.18] dark:invert-0 invert"
+                  className="w-full h-full object-cover object-center opacity-[0.25] dark:opacity-[0.3] dark:invert-0 invert"
                 />
                 <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
               </div>
@@ -492,13 +494,15 @@ export default function Home() {
                 <img
                   src={sectionArt[0].src}
                   alt=""
-                  className="w-full h-16 object-cover object-center opacity-[0.14] dark:opacity-[0.2] dark:invert-0 invert"
+                  className="w-full h-24 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <p className="font-elvish text-[11px] text-muted-foreground/40 italic">
-                    "{sectionArt[0].quote}" <span className="text-muted-foreground/25">— {sectionArt[0].attribution}</span>
-                  </p>
+                <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/40 to-background/80" />
+                <div className="absolute inset-0 flex items-center justify-center px-4">
+                  <div className="bg-background/60 backdrop-blur-sm rounded-md px-4 py-1.5">
+                    <p className="font-elvish text-xs text-foreground/70 italic text-center">
+                      "{sectionArt[0].quote}" <span className="text-foreground/40">— {sectionArt[0].attribution}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -533,13 +537,15 @@ export default function Home() {
                 <img
                   src={sectionArt[1].src}
                   alt=""
-                  className="w-full h-16 object-cover object-center opacity-[0.14] dark:opacity-[0.2] dark:invert-0 invert"
+                  className="w-full h-24 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
                 />
-                <div className="absolute inset-0 bg-gradient-to-r from-background via-transparent to-background" />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <p className="font-elvish text-[11px] text-muted-foreground/40 italic">
-                    "{sectionArt[1].quote}" <span className="text-muted-foreground/25">— {sectionArt[1].attribution}</span>
-                  </p>
+                <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/40 to-background/80" />
+                <div className="absolute inset-0 flex items-center justify-center px-4">
+                  <div className="bg-background/60 backdrop-blur-sm rounded-md px-4 py-1.5">
+                    <p className="font-elvish text-xs text-foreground/70 italic text-center">
+                      "{sectionArt[1].quote}" <span className="text-foreground/40">— {sectionArt[1].attribution}</span>
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -566,7 +572,7 @@ export default function Home() {
           <img
             src={sectionArt[2].src}
             alt=""
-            className="w-full h-full object-cover object-center opacity-[0.10] dark:opacity-[0.14] dark:invert-0 invert"
+            className="w-full h-full object-cover object-center opacity-[0.2] dark:opacity-[0.25] dark:invert-0 invert"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-background/70" />
         </div>
