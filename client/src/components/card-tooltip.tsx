@@ -86,9 +86,57 @@ const NOT_CARD_NAMES = new Set([
   "upgrade path",
 ]);
 
+// Land cards — skip tooltip/API calls (no useful visual, saves Scryfall requests)
+const LAND_NAMES = new Set([
+  // Basic lands
+  "plains", "island", "swamp", "mountain", "forest", "wastes",
+  // Snow basics
+  "snow-covered plains", "snow-covered island", "snow-covered swamp",
+  "snow-covered mountain", "snow-covered forest",
+  // Common fetches
+  "flooded strand", "polluted delta", "bloodstained mire",
+  "wooded foothills", "windswept heath", "scalding tarn",
+  "misty rainforest", "verdant catacombs", "arid mesa", "marsh flats",
+  // Common shocks
+  "hallowed fountain", "watery grave", "blood crypt", "stomping ground",
+  "temple garden", "godless shrine", "steam vents", "overgrown tomb",
+  "sacred foundry", "breeding pool",
+  // Common fast/check/pain/filter lands & utility
+  "inspiring vantage", "spirebluff canal", "blooming marsh",
+  "concealed courtyard", "botanical sanctum", "blackcleave cliffs",
+  "copperline gorge", "darkslick shores", "razorverge thicket",
+  "seachrome coast",
+  // Triomes
+  "indatha triome", "ketria triome", "raugrin triome",
+  "savai triome", "zagoth triome", "jetmir's garden",
+  "raffine's tower", "spara's headquarters", "xander's lounge",
+  "ziatora's proving ground",
+  // Misc utility lands
+  "cavern of souls", "ancient tomb", "city of brass",
+  "mana confluence", "gemstone caverns", "urza's saga",
+  "field of the dead", "castle locthwain", "castle vantress",
+  "castle embereth", "castle garenbrig", "castle ardenvale",
+  "fabled passage", "prismatic vista", "fiery islet",
+  "sunbaked canyon", "waterlogged grove", "nurturing peatland",
+  "silent clearing", "horizon canopy",
+  // Pioneer/Standard common duals
+  "shattered sanctum", "stormcarved coast", "deathcap glade",
+  "sundown pass", "dreamroot cascade", "haunted ridge",
+  "overgrown farmland", "deserted beach", "shipwreck marsh",
+  "rockfall vale",
+  // Generic land references the AI might bold
+  "basic land", "basic lands", "fetch land", "fetch lands",
+  "shock land", "shock lands", "dual land", "dual lands",
+  "pain land", "pain lands", "check land", "check lands",
+  "fast land", "fast lands", "filter land", "filter lands",
+  "utility land", "utility lands", "man land", "man lands",
+  "creature land", "creature lands", "triome", "triomes",
+]);
+
 function isLikelyLabel(text: string): boolean {
   const lower = text.toLowerCase().trim();
   if (NOT_CARD_NAMES.has(lower)) return true;
+  if (LAND_NAMES.has(lower)) return true;
   // Pure numbers like "7/10" or "$5.99"
   if (/^\d/.test(lower) && /\/\d+$/.test(lower)) return true;
   if (/^\$/.test(lower)) return true;
