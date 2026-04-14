@@ -16,6 +16,37 @@ import { eq, desc } from "drizzle-orm";
 const sqlite = new Database("data.db");
 sqlite.pragma("journal_mode = WAL");
 
+// Auto-create tables if they don't exist (handles fresh deploys)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS analyses (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    deck_name TEXT NOT NULL,
+    format TEXT NOT NULL,
+    decklist TEXT NOT NULL,
+    card_count INTEGER NOT NULL,
+    analysis_result TEXT,
+    mana_curve TEXT,
+    color_distribution TEXT,
+    created_at TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS credits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL UNIQUE,
+    coins INTEGER NOT NULL DEFAULT 3
+  );
+  CREATE TABLE IF NOT EXISTS transactions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    method TEXT NOT NULL,
+    amount INTEGER NOT NULL,
+    price_paid TEXT NOT NULL,
+    tx_signature TEXT,
+    status TEXT NOT NULL DEFAULT 'pending',
+    created_at TEXT NOT NULL
+  );
+`);
+
 export const db = drizzle(sqlite);
 
 export interface IStorage {
