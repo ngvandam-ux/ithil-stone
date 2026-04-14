@@ -276,11 +276,15 @@ export default function Home() {
                 className="font-display text-xl font-bold tracking-wide mb-2"
                 data-testid="text-hero-title"
               >
-                Gaze Into the Stone
+                AI-Powered MTG Deck Analysis
               </h1>
-              <p className="text-sm text-muted-foreground max-w-md mx-auto">
-                Present your forces to the palantír. Receive counsel on
-                strategy, hidden alliances, and reinforcements your army requires.
+              <p className="text-sm text-muted-foreground max-w-lg mx-auto">
+                Paste your Magic: The Gathering decklist. The seeing stone reveals
+                hidden combos, optimal card swaps, mana base fixes, and meta positioning
+                across Standard, Modern, Pioneer, Legacy, and Commander.
+              </p>
+              <p className="text-xs text-muted-foreground/50 mt-2">
+                3 free analyses per session · All MTG formats supported
               </p>
             </div>
 
@@ -401,7 +405,7 @@ export default function Home() {
                 </Button>
               </div>
 
-              {/* Feature cards — war counsel themed */}
+              {/* Feature cards — MTG-specific */}
               <Card className="border-border/30 bg-muted/30">
                 <CardContent className="p-4">
                   <div className="grid grid-cols-3 gap-4 text-center">
@@ -409,26 +413,52 @@ export default function Home() {
                       <Shield className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
                       <p className="text-xs font-medium">Scryfall Verified</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Every card confirmed
+                        Every MTG card validated
                       </p>
                     </div>
                     <div>
                       <Eye className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
-                      <p className="text-xs font-medium">Deep Counsel</p>
+                      <p className="text-xs font-medium">Combo Discovery</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        AI war-room analysis
+                        Find hidden synergies
                       </p>
                     </div>
                     <div>
                       <Swords className="w-4 h-4 mx-auto mb-1.5 text-muted-foreground" />
-                      <p className="text-xs font-medium">Battle-Ready</p>
+                      <p className="text-xs font-medium">Meta Positioning</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Meta & combo intel
+                        Live tournament data
                       </p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
+
+              {/* What you get — SEO-rich content section */}
+              <div className="border-t border-border/20 pt-6 mt-2">
+                <h2 className="font-display text-sm font-semibold text-center mb-4">What the Stone Reveals</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-border/20 p-3">
+                    <p className="text-xs font-medium mb-1">Deck Archetype & Power Rating</p>
+                    <p className="text-xs text-muted-foreground">Identifies your MTG deck's archetype, rates speed, consistency, resilience, and disruption on a 1-10 scale.</p>
+                  </div>
+                  <div className="rounded-lg border border-border/20 p-3">
+                    <p className="text-xs font-medium mb-1">Combo & Synergy Detection</p>
+                    <p className="text-xs text-muted-foreground">Discovers hidden multi-card combos in your deck you may have missed, rated by competitive viability.</p>
+                  </div>
+                  <div className="rounded-lg border border-border/20 p-3">
+                    <p className="text-xs font-medium mb-1">Cards You're Missing</p>
+                    <p className="text-xs text-muted-foreground">8-12 card recommendations in Must-Add, Strong Upgrade, and Spicy Tech tiers with specific cuts suggested.</p>
+                  </div>
+                  <div className="rounded-lg border border-border/20 p-3">
+                    <p className="text-xs font-medium mb-1">Mana Base & Sideboard Guide</p>
+                    <p className="text-xs text-muted-foreground">Color pip analysis, land count optimization, and a complete sideboard plan for your format's top matchups.</p>
+                  </div>
+                </div>
+                <p className="text-center text-[10px] text-muted-foreground/40 mt-3">
+                  Works with MTG Arena exports, Moxfield, Archidekt, and manual decklists
+                </p>
+              </div>
 
               {/* Lore easter egg — random age fact */}
               <Tooltip>
@@ -448,9 +478,15 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-border/30 mt-16">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center space-y-2">
           <p className="text-xs text-muted-foreground">
-            <span className="font-display">Ithil-stone</span> · Card data from{" "}
+            <span className="font-display">Ithil-stone</span> — AI-Powered Magic: The Gathering Deck Analyzer
+          </p>
+          <p className="text-[10px] text-muted-foreground/50">
+            MTG deck analysis for Standard · Modern · Pioneer · Legacy · Vintage · Pauper · Commander / EDH
+          </p>
+          <p className="text-[10px] text-muted-foreground/40">
+            Card data from{" "}
             <a
               href="https://scryfall.com"
               target="_blank"
@@ -459,7 +495,7 @@ export default function Home() {
             >
               Scryfall
             </a>{" "}
-            · Not affiliated with Wizards of the Coast
+            · Magic: The Gathering is © Wizards of the Coast · Ithil-stone is not affiliated with WotC
           </p>
           <p className="text-[10px] text-muted-foreground/30 mt-1 italic">
             "{randomQuote.quote}" {randomQuote.attribution}
