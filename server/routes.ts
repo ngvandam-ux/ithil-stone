@@ -429,8 +429,8 @@ CRITICAL FORMAT RULES:
   try {
     const client = new Anthropic();
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 8192,
+      model: "claude-opus-4-20250514",
+      max_tokens: 16384,
       messages: [{ role: "user", content: prompt }],
     });
 
