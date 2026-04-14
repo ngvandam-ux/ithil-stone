@@ -2,9 +2,26 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { deckSubmitSchema } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { Resend } from "resend";
 import { getMetaContext, getCrowdContext, recordDeckSubmission, getMetaCacheStats } from "./meta-fetcher";
+
+// ── Auth config ──────────────────────────────────────────────────────
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+const APP_URL = process.env.APP_URL || "https://ithilstone.gg";
+const MAGIC_LINK_EXPIRY_MINUTES = 15;
+
+// In-memory auth sessions: token → { userId, email, expiresAt }
+const authSessions = new Map<string, { userId: string; email: string; expiresAt: number }>();
+const AUTH_SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+function generateToken(): string {
+  return randomBytes(32).toString("hex");
+}
 
 // ── Scryfall card lookup ──────────────────────────────────────────────
 async function lookupCard(cardName: string): Promise<any> {
@@ -695,22 +712,161 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // ── Middleware: session ID + auth resolution ────────────────────
   app.use((req, _res, next) => {
     if (!req.headers["x-session-id"]) {
       req.headers["x-session-id"] = randomUUID();
     }
+    // Resolve auth token → user
+    const authToken = req.headers["x-auth-token"] as string | undefined;
+    if (authToken) {
+      const session = authSessions.get(authToken);
+      if (session && session.expiresAt > Date.now()) {
+        (req as any).userId = session.userId;
+        (req as any).userEmail = session.email;
+      } else if (session) {
+        authSessions.delete(authToken); // expired
+      }
+    }
     next();
   });
 
+  // ── Auth: Send magic link ──────────────────────────────────────
+  app.post("/api/auth/send-link", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email required" });
+      }
+
+      const normalizedEmail = email.toLowerCase().trim();
+      const token = generateToken();
+      const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRY_MINUTES * 60 * 1000).toISOString();
+
+      await storage.createMagicLink(normalizedEmail, token, expiresAt);
+
+      const magicUrl = `${APP_URL}/#/auth/verify/${token}`;
+
+      if (resend) {
+        await resend.emails.send({
+          from: "Ithil-stone <noreply@ithilstone.gg>",
+          to: normalizedEmail,
+          subject: "Your key to the seeing-stone",
+          html: `
+            <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 480px; margin: 0 auto; padding: 32px; background: #0a0f0a; color: #c8cfc8; border-radius: 12px;">
+              <h1 style="color: #4ade80; font-size: 20px; margin-bottom: 8px; font-variant: small-caps; letter-spacing: 1px;">Ithil-stone</h1>
+              <p style="color: #8a9a8a; font-size: 13px; margin-bottom: 24px;">AI-Powered MTG Deck Analysis</p>
+              <p style="font-size: 15px; line-height: 1.6;">A request has been made to access the seeing-stone. Click below to enter:</p>
+              <a href="${magicUrl}" style="display: inline-block; margin: 24px 0; padding: 14px 32px; background: #166534; color: #fff; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; letter-spacing: 0.5px;">Enter the Stone</a>
+              <p style="font-size: 13px; color: #5a6a5a; margin-top: 24px;">This link expires in ${MAGIC_LINK_EXPIRY_MINUTES} minutes. If you did not request this, you may safely ignore it.</p>
+              <p style="font-size: 12px; color: #3a4a3a; margin-top: 32px; font-style: italic;">"The palant\u00EDri are not all accounted for. We do not know who else may be watching."</p>
+            </div>
+          `,
+        });
+        console.log(`Magic link sent to ${normalizedEmail}`);
+      } else {
+        // Dev mode: log the link to console
+        console.log(`[DEV] Magic link for ${normalizedEmail}: ${magicUrl}`);
+      }
+
+      res.json({ success: true, message: "If that email is valid, a magic link has been sent." });
+    } catch (err: any) {
+      console.error("Send magic link error:", err);
+      res.status(500).json({ error: "Failed to send magic link" });
+    }
+  });
+
+  // ── Auth: Verify magic link ────────────────────────────────────
+  app.get("/api/auth/verify", async (req, res) => {
+    try {
+      const { token } = req.query;
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Token required" });
+      }
+
+      const link = await storage.getMagicLinkByToken(token);
+      if (!link) {
+        return res.status(400).json({ error: "Invalid or expired link" });
+      }
+      if (link.used) {
+        return res.status(400).json({ error: "This link has already been used" });
+      }
+      if (new Date(link.expiresAt) < new Date()) {
+        return res.status(400).json({ error: "This link has expired" });
+      }
+
+      // Mark link as used
+      await storage.markMagicLinkUsed(token);
+
+      // Find or create user
+      let user = await storage.getUserByEmail(link.email);
+      if (!user) {
+        user = await storage.createUser(randomUUID(), link.email);
+      }
+
+      // Create auth session
+      const authToken = generateToken();
+      authSessions.set(authToken, {
+        userId: user.id,
+        email: user.email,
+        expiresAt: Date.now() + AUTH_SESSION_DURATION_MS,
+      });
+
+      // Migrate anonymous session data to user account
+      const sessionId = req.headers["x-session-id"] as string;
+      if (sessionId) {
+        await storage.migrateSessionToUser(sessionId, user.id);
+      }
+
+      res.json({
+        success: true,
+        authToken,
+        user: { id: user.id, email: user.email },
+      });
+    } catch (err: any) {
+      console.error("Verify magic link error:", err);
+      res.status(500).json({ error: "Failed to verify link" });
+    }
+  });
+
+  // ── Auth: Get current user ─────────────────────────────────────
+  app.get("/api/auth/me", async (req, res) => {
+    const userId = (req as any).userId;
+    if (!userId) {
+      return res.json({ user: null });
+    }
+    const user = await storage.getUserById(userId);
+    if (!user) {
+      return res.json({ user: null });
+    }
+    res.json({ user: { id: user.id, email: user.email } });
+  });
+
+  // ── Auth: Logout ───────────────────────────────────────────────
+  app.post("/api/auth/logout", (req, res) => {
+    const authToken = req.headers["x-auth-token"] as string | undefined;
+    if (authToken) {
+      authSessions.delete(authToken);
+    }
+    res.json({ success: true });
+  });
+
+  // ── Credits (user-aware) ───────────────────────────────────────
   app.get("/api/credits", async (req, res) => {
     const sessionId = req.headers["x-session-id"] as string;
-    const credit = await storage.initCredits(sessionId);
+    const userId = (req as any).userId as string | undefined;
+    const credit = await storage.initCredits(sessionId, userId);
     res.json(credit);
   });
 
+  // ── Analyses (user-aware) ──────────────────────────────────────
   app.get("/api/analyses", async (req, res) => {
     const sessionId = req.headers["x-session-id"] as string;
-    const list = await storage.getAnalysesBySession(sessionId);
+    const userId = (req as any).userId as string | undefined;
+    // If logged in, return user's analyses; otherwise session-based
+    const list = userId
+      ? await storage.getAnalysesByUser(userId)
+      : await storage.getAnalysesBySession(sessionId);
     res.json(list);
   });
 
@@ -790,12 +946,13 @@ export async function registerRoutes(
       // Auto-clean Arena format (strip set codes + collector numbers)
       const decklist = cleanArenaFormat(parsed.data.decklist);
       const sessionId = req.headers["x-session-id"] as string;
+      const userId = (req as any).userId as string | undefined;
 
       // Check credits
-      const credit = await storage.initCredits(sessionId);
+      const credit = await storage.initCredits(sessionId, userId);
       if (credit.coins <= 0) {
         return res.status(402).json({
-          error: "No coins remaining. Each session starts with 3 free analyses.",
+          error: "No Mithril Rings remaining. Sign in to preserve your balance, or visit the Mint to acquire more.",
         });
       }
 
@@ -846,6 +1003,7 @@ export async function registerRoutes(
       // Store analysis
       const analysis = await storage.createAnalysis({
         sessionId,
+        userId: userId ?? null,
         deckName,
         format,
         decklist,
@@ -898,6 +1056,7 @@ export async function registerRoutes(
     try {
       const { packId, txSignature } = req.body;
       const sessionId = req.headers["x-session-id"] as string;
+      const userId = (req as any).userId as string | undefined;
 
       if (!packId || !txSignature) {
         return res.status(400).json({ error: "Pack ID and transaction signature required" });
@@ -909,6 +1068,7 @@ export async function registerRoutes(
       // Record the transaction
       const tx = await storage.createTransaction({
         sessionId,
+        userId: userId ?? null,
         method: "solana",
         amount: pack.rings,
         pricePaid: `${pack.priceSol} SOL`,
@@ -932,6 +1092,7 @@ export async function registerRoutes(
     try {
       const { packId, sessionIdOrRef } = req.body;
       const sessionId = req.headers["x-session-id"] as string;
+      const userId = (req as any).userId as string | undefined;
 
       if (!packId || !sessionIdOrRef) {
         return res.status(400).json({ error: "Pack ID and payment reference required" });
@@ -943,6 +1104,7 @@ export async function registerRoutes(
       // Record the transaction
       const tx = await storage.createTransaction({
         sessionId,
+        userId: userId ?? null,
         method: "stripe",
         amount: pack.rings,
         pricePaid: `$${pack.priceUsd}`,

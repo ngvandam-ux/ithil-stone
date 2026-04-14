@@ -2,17 +2,41 @@ import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Analyses table - stores deck analysis results
+// ── Users table ──────────────────────────────────────────────────────
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(), // UUID
+  email: text("email").notNull().unique(),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertUserSchema = createInsertSchema(users);
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+// ── Magic links table ────────────────────────────────────────────────
+export const magicLinks = sqliteTable("magic_links", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  email: text("email").notNull(),
+  token: text("token").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  used: integer("used").notNull().default(0), // 0 = unused, 1 = used
+  createdAt: text("created_at").notNull(),
+});
+
+export type MagicLink = typeof magicLinks.$inferSelect;
+
+// ── Analyses table ───────────────────────────────────────────────────
 export const analyses = sqliteTable("analyses", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   sessionId: text("session_id").notNull(),
+  userId: text("user_id"), // null for anonymous, set when logged in
   deckName: text("deck_name").notNull(),
   format: text("format").notNull(),
   decklist: text("decklist").notNull(),
   cardCount: integer("card_count").notNull(),
-  analysisResult: text("analysis_result"), // JSON string with AI analysis
-  manaCurve: text("mana_curve"), // JSON string
-  colorDistribution: text("color_distribution"), // JSON string
+  analysisResult: text("analysis_result"),
+  manaCurve: text("mana_curve"),
+  colorDistribution: text("color_distribution"),
   createdAt: text("created_at").notNull(),
 });
 
@@ -23,10 +47,11 @@ export const insertAnalysisSchema = createInsertSchema(analyses).omit({
 export type InsertAnalysis = z.infer<typeof insertAnalysisSchema>;
 export type Analysis = typeof analyses.$inferSelect;
 
-// Credits table - tracks session-based coin balance
+// ── Credits table ────────────────────────────────────────────────────
 export const credits = sqliteTable("credits", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   sessionId: text("session_id").notNull().unique(),
+  userId: text("user_id"), // null for anonymous, set when logged in
   coins: integer("coins").notNull().default(3),
 });
 
@@ -37,15 +62,16 @@ export const insertCreditSchema = createInsertSchema(credits).omit({
 export type InsertCredit = z.infer<typeof insertCreditSchema>;
 export type Credit = typeof credits.$inferSelect;
 
-// Transactions table - tracks coin purchases
+// ── Transactions table ───────────────────────────────────────────────
 export const transactions = sqliteTable("transactions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   sessionId: text("session_id").notNull(),
-  method: text("method").notNull(), // 'solana' | 'paypal'
-  amount: integer("amount").notNull(), // coins purchased
-  pricePaid: text("price_paid").notNull(), // e.g. "4.99" or "0.02 SOL"
-  txSignature: text("tx_signature"), // Solana tx sig or PayPal order ID
-  status: text("status").notNull().default("pending"), // pending | confirmed | failed
+  userId: text("user_id"), // null for anonymous, set when logged in
+  method: text("method").notNull(), // 'solana' | 'stripe'
+  amount: integer("amount").notNull(),
+  pricePaid: text("price_paid").notNull(),
+  txSignature: text("tx_signature"),
+  status: text("status").notNull().default("pending"),
   createdAt: text("created_at").notNull(),
 });
 
@@ -56,7 +82,7 @@ export const insertTransactionSchema = createInsertSchema(transactions).omit({
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
 
-// Validation schema for deck submission
+// ── Validation schemas ───────────────────────────────────────────────
 export const deckSubmitSchema = z.object({
   deckName: z.string().min(1, "Deck name is required").max(100),
   format: z.enum(["standard", "modern", "legacy", "vintage", "pioneer", "pauper", "commander", "historic", "explorer"]),
