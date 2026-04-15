@@ -15,6 +15,7 @@ import {
   type PageVisit,
   type InsertPageVisit,
   type Subscriber,
+  type Setting,
   analyses,
   credits,
   transactions,
@@ -26,6 +27,7 @@ import {
   newsletters,
   subscribers,
   pageVisits,
+  settings,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -136,6 +138,11 @@ export async function initializeDatabase() {
       session_id TEXT NOT NULL,
       redeemed_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -196,6 +203,11 @@ export interface IStorage {
   // Page visits
   recordPageVisit(data: InsertPageVisit): Promise<PageVisit>;
   getPageVisits(): Promise<PageVisit[]>;
+
+  // Settings
+  getSetting(key: string): Promise<string | null>;
+  setSetting(key: string, value: string): Promise<void>;
+  getAllSettings(): Promise<Setting[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -614,6 +626,25 @@ export class DatabaseStorage implements IStorage {
   async getSubscriberByEmail(email: string): Promise<Subscriber | undefined> {
     const [sub] = await db.select().from(subscribers).where(eq(subscribers.email, email));
     return sub;
+  }
+
+  // ── Settings ──────────────────────────────────────────
+  async getSetting(key: string): Promise<string | null> {
+    const [row] = await db.select().from(settings).where(eq(settings.key, key));
+    return row?.value ?? null;
+  }
+
+  async setSetting(key: string, value: string): Promise<void> {
+    await db.insert(settings)
+      .values({ key, value, updatedAt: new Date().toISOString() })
+      .onConflictDoUpdate({
+        target: settings.key,
+        set: { value, updatedAt: new Date().toISOString() },
+      });
+  }
+
+  async getAllSettings(): Promise<Setting[]> {
+    return await db.select().from(settings);
   }
 }
 

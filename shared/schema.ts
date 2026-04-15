@@ -175,3 +175,12 @@ export const pageVisits = pgTable("page_visits", {
 export const insertPageVisitSchema = createInsertSchema(pageVisits).omit({ id: true });
 export type InsertPageVisit = z.infer<typeof insertPageVisitSchema>;
 export type PageVisit = typeof pageVisits.$inferSelect;
+
+// ── Settings table (key-value store for editable prompts, etc.) ──────
+export const settings = pgTable("settings", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export type Setting = typeof settings.$inferSelect;

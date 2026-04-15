@@ -1723,7 +1723,13 @@ export async function registerRoutes(
   // POST /api/admin/newsletter/generate
   app.post("/api/admin/newsletter/generate", requireAdmin, async (req, res) => {
     try {
-      const { type = "daily", customTopic } = req.body as { type?: "daily" | "weekly"; customTopic?: string };
+      const { type = "daily", customTopic, newsLinks, spotlightCard, spotlightNotes } = req.body as {
+        type?: "daily" | "weekly";
+        customTopic?: string;
+        newsLinks?: string;
+        spotlightCard?: string;
+        spotlightNotes?: string;
+      };
       if (type !== "daily" && type !== "weekly") {
         return res.status(400).json({ error: 'Type must be "daily" or "weekly"' });
       }
@@ -1820,18 +1826,50 @@ export async function registerRoutes(
         await new Promise(r => setTimeout(r, 120));
       }
 
+      // ── 3b. Fetch spotlight card image if provided ───────────────
+      let spotlightCardData: any = null;
+      if (spotlightCard) {
+        try {
+          const result = await fetchScryfallCard(spotlightCard);
+          if (result) {
+            cardImageMap[result.name] = result.artCrop;
+            spotlightCardData = result;
+          }
+        } catch { /* graceful */ }
+      }
+
+      // ── 3c. Fetch news link content if provided ───────────────────
+      let fetchedNewsContent: string[] = [];
+      if (newsLinks) {
+        const urls = newsLinks.match(/https?:\/\/[^\s]+/g) || [];
+        for (const url of urls.slice(0, 5)) {
+          try {
+            const r = await fetch(url, { headers: { "User-Agent": "Ithil-stone/1.0" } });
+            if (r.ok) {
+              const text = await r.text();
+              // Extract text content, strip HTML
+              const cleaned = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "").replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+              fetchedNewsContent.push(`[FROM: ${url}]\n${cleaned.slice(0, 2000)}`);
+            }
+          } catch { /* graceful */ }
+        }
+      }
+
       // ── 4. Call Claude to write the newsletter ─────────────────────
       const anthropicClient = new Anthropic();
 
-      let newsletterPrompt: string;
-      if (type === "daily") {
-        newsletterPrompt = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
+      // Load editable prompts from DB (fall back to defaults)
+      const voiceKey = "prompt_voice";
+      const dailyStructKey = "prompt_daily_structure";
+      const weeklyStructKey = "prompt_weekly_structure";
+
+      const defaultVoice = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
 
 Your editorial voice: You're a grizzled old-school tournament Magic player who's been playing since Revised edition in 1994. You think modern card design is pushed and overpowered — too much crazy value stapled onto cards for free. You miss when Magic was about tight play decisions and smart deckbuilding, not who drew their busted mythic first. But you grudgingly respect when new cards earn it through clever design. You speak like a wise war counselor who's fought every meta since the game began.
 
-Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.
+Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.`;
 
-Write a daily newsletter in Axios-style format. Short, punchy, scannable. Under 1,000 words.
+      const defaultDailyStructure = `Write a daily newsletter in Axios-style format. Short, punchy, scannable. Under 1,000 words.
 
 STRUCTURE (use these exact section headers with numbered format):
 1. 1 big thing: [compelling headline]
@@ -1848,29 +1886,9 @@ STRUCTURE (use these exact section headers with numbered format):
 
 4. From the Stone
    - One-liner platform stat teaser linking back to ithilstone.gg
-   - e.g. "247 Commander decks analyzed this week. Most common mistake? [insight]"
+   - e.g. "247 Commander decks analyzed this week. Most common mistake? [insight]"`;
 
-${customTopic ? `CUSTOM TOPIC FOCUS: ${customTopic}\n\n` : ""}FORMAT RULES:
-- Bold card names like **Lightning Bolt** (but never land cards like Plains, Island, etc.)
-- Keep it conversational and opinionated
-- Every section should make the reader think "I should check my deck"
-- End with a subtle CTA to ithilstone.gg
-
-Here is the MTG data gathered today:
-${JSON.stringify(mtgDataSources, null, 2)}
-
-Here are the platform stats:
-${JSON.stringify(platformStats, null, 2)}
-
-OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.`;
-      } else {
-        newsletterPrompt = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
-
-Your editorial voice: You're a grizzled old-school tournament Magic player who's been playing since Revised edition in 1994. You think modern card design is pushed and overpowered — too much crazy value stapled onto cards for free. You miss when Magic was about tight play decisions and smart deckbuilding, not who drew their busted mythic first. But you grudgingly respect when new cards earn it through clever design. You speak like a wise war counselor who's fought every meta since the game began.
-
-Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.
-
-Write a weekly newsletter called "The Palantír Report". This is the deep-dive strategic briefing. Roughly 2,000-2,500 words.
+      const defaultWeeklyStructure = `Write a weekly newsletter called "The Palantír Report". This is the deep-dive strategic briefing. Roughly 2,000-2,500 words.
 
 STRUCTURE:
 ## Tournament Recap
@@ -1894,13 +1912,51 @@ STRUCTURE:
 - What are users building? What formats dominate?
 
 ## Interesting Finds
-- 2-3 weird, cool, or notable things from the MTG world this week
+- 2-3 weird, cool, or notable things from the MTG world this week`;
 
-${customTopic ? `CUSTOM TOPIC FOCUS: ${customTopic}\n\n` : ""}FORMAT RULES:
+      const voice = (await storage.getSetting(voiceKey)) || defaultVoice;
+      const structure = type === "daily"
+        ? (await storage.getSetting(dailyStructKey)) || defaultDailyStructure
+        : (await storage.getSetting(weeklyStructKey)) || defaultWeeklyStructure;
+
+      const formatRules = `FORMAT RULES:
 - Bold card names like **Lightning Bolt** (but never land cards like Plains, Island, etc.)
 - Keep it conversational and opinionated
-- Deep analysis, not surface-level recaps
-- End with a subtle CTA to ithilstone.gg
+${type === "daily" ? "- Every section should make the reader think \"I should check my deck\"" : "- Deep analysis, not surface-level recaps"}
+- End with a subtle CTA to ithilstone.gg`;
+
+      // Build optional sections
+      const extraSections: string[] = [];
+
+      if (customTopic) {
+        extraSections.push(`CUSTOM TOPIC FOCUS: ${customTopic}`);
+      }
+
+      if (spotlightCard) {
+        let spotlightSection = `\nCARD SPOTLIGHT — FEATURED SECTION:\nThe admin wants you to write a dedicated spotlight section on the card "${spotlightCard}".`;
+        if (spotlightNotes) {
+          spotlightSection += ` Their take/angle: "${spotlightNotes}"`;
+        }
+        if (spotlightCardData) {
+          spotlightSection += `\nCard data: ${JSON.stringify(spotlightCardData)}`;
+        }
+        spotlightSection += `\nWrite this as a ## Card Spotlight section with genuine opinionated analysis. Include the card name bolded.`;
+        extraSections.push(spotlightSection);
+      }
+
+      if (newsLinks) {
+        let newsSection = `\nNEWS TO ANALYZE AND WEAVE IN:\nThe admin has provided the following news/links to incorporate into the newsletter. Analyze, highlight key takeaways, and tie them into your analysis naturally:\n\n${newsLinks}`;
+        if (fetchedNewsContent.length > 0) {
+          newsSection += `\n\nFETCHED ARTICLE CONTENT:\n${fetchedNewsContent.join("\n\n")}`;
+        }
+        extraSections.push(newsSection);
+      }
+
+      let newsletterPrompt = `${voice}
+
+${structure}
+
+${extraSections.length > 0 ? extraSections.join("\n\n") + "\n\n" : ""}${formatRules}
 
 Here is the MTG data gathered today:
 ${JSON.stringify(mtgDataSources, null, 2)}
@@ -1909,7 +1965,6 @@ Here are the platform stats:
 ${JSON.stringify(platformStats, null, 2)}
 
 OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.`;
-      }
 
       const contentResponse = await anthropicClient.messages.create({
         model: "claude-opus-4-6",
@@ -2144,6 +2199,33 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: "Failed to remove subscriber" });
+    }
+  });
+
+  // ── Settings (editable prompts) ───────────────────────────
+
+  app.get("/api/admin/settings", requireAdmin, async (_req, res) => {
+    try {
+      const all = await storage.getAllSettings();
+      const map: Record<string, string> = {};
+      for (const s of all) map[s.key] = s.value;
+      res.json(map);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch settings" });
+    }
+  });
+
+  app.put("/api/admin/settings/:key", requireAdmin, async (req, res) => {
+    try {
+      const { key } = req.params;
+      const { value } = req.body as { value: string };
+      if (!value || typeof value !== "string") {
+        return res.status(400).json({ error: "Value is required" });
+      }
+      await storage.setSetting(key, value);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to save setting" });
     }
   });
 
