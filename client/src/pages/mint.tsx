@@ -27,13 +27,11 @@ import { Link } from "wouter";
 // ── Your Solana wallet address ──
 const SOLANA_WALLET = "5purmEfPT59dbTupSXjk7XxZqQGmbsvLsXmBNSsBE2us";
 
-// ── Stripe Payment Links — replace these with your real links once created ──
-// Instructions: Create 3 payment links in Stripe Dashboard → Payment Links → +New
-// Set each to the pack price. Paste the URLs here.
+// ── Stripe Payment Links ──
 const STRIPE_LINKS: Record<string, string> = {
-  "pack-3": "STRIPE_LINK_SCOUT_POUCH",        // $1.99 — replace with your real Stripe link
-  "pack-10": "STRIPE_LINK_RANGER_SATCHEL",    // $4.99
-  "pack-30": "STRIPE_LINK_WAR_CHEST",         // $12.99
+  "pack-3": "https://buy.stripe.com/6oUeVe3rXaQCaZS5ax1kA02",   // Scout's Pouch — $1.99
+  "pack-10": "https://buy.stripe.com/aFa4gA1jPbUGgkc6eB1kA01",  // Ranger's Satchel — $4.99
+  "pack-30": "https://buy.stripe.com/7sY4gAgeJ8Iuec432p1kA00",  // War Chest — $12.99
 };
 
 interface RingPack {
