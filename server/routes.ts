@@ -2016,7 +2016,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
         const batch = emails.slice(i, i + batchSize);
         const emailPayloads = batch.map(recipientEmail => ({
           from: "Ithil-stone <noreply@ithilstone.gg>",
-          to: recipientEmail,
+          to: [recipientEmail],
           subject: newsletter.subject,
           html: newsletter.htmlContent.replace(
             /{{unsubscribe_url}}/g,
@@ -2025,10 +2025,15 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
         }));
 
         try {
-          await resend.batch.send(emailPayloads);
-          sentCount += batch.length;
+          const { data, error } = await resend.batch.send(emailPayloads);
+          if (error) {
+            console.error(`Resend batch error (batch starting at ${i}):`, JSON.stringify(error));
+          } else {
+            sentCount += batch.length;
+            console.log(`Batch sent successfully (${batch.length} emails):`, JSON.stringify(data));
+          }
         } catch (batchErr: any) {
-          console.error(`Batch send error (batch starting at ${i}):`, batchErr);
+          console.error(`Batch send exception (batch starting at ${i}):`, batchErr?.message || batchErr);
           // Continue with remaining batches
         }
       }
