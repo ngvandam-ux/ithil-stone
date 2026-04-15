@@ -25,128 +25,109 @@ import {
   newsletters,
   pageVisits,
 } from "@shared/schema";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
-import { eq, desc, and, or } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+import { eq, desc, and, or, sql } from "drizzle-orm";
 
-const sqlite = new Database("data.db");
-sqlite.pragma("journal_mode = WAL");
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
 
-// Auto-create tables if they don't exist (handles fresh deploys)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id TEXT PRIMARY KEY,
-    email TEXT NOT NULL UNIQUE,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS magic_links (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT NOT NULL,
-    token TEXT NOT NULL UNIQUE,
-    expires_at TEXT NOT NULL,
-    used INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS analyses (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    user_id TEXT,
-    deck_name TEXT NOT NULL,
-    format TEXT NOT NULL,
-    decklist TEXT NOT NULL,
-    card_count INTEGER NOT NULL,
-    analysis_result TEXT,
-    mana_curve TEXT,
-    color_distribution TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS credits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL UNIQUE,
-    user_id TEXT,
-    coins INTEGER NOT NULL DEFAULT 3
-  );
-  CREATE TABLE IF NOT EXISTS transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    user_id TEXT,
-    method TEXT NOT NULL,
-    amount INTEGER NOT NULL,
-    price_paid TEXT NOT NULL,
-    tx_signature TEXT,
-    status TEXT NOT NULL DEFAULT 'pending',
-    created_at TEXT NOT NULL
-  );
-`);
+export const db = drizzle(pool);
 
-// Migrate existing tables — add user_id columns if missing
-try { sqlite.exec("ALTER TABLE analyses ADD COLUMN user_id TEXT"); } catch {}
-try { sqlite.exec("ALTER TABLE credits ADD COLUMN user_id TEXT"); } catch {}
-try { sqlite.exec("ALTER TABLE transactions ADD COLUMN user_id TEXT"); } catch {}
-
-// Auth sessions table (DB-persisted, survives redeploys)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS auth_sessions (
-    token TEXT PRIMARY KEY,
-    user_id TEXT NOT NULL,
-    email TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL
-  );
-`);
-
-// Newsletters table
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS newsletters (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    type TEXT NOT NULL,
-    subject TEXT NOT NULL,
-    html_content TEXT NOT NULL,
-    social_versions TEXT,
-    mtg_data_used TEXT,
-    status TEXT NOT NULL DEFAULT 'draft',
-    sent_at TEXT,
-    recipient_count INTEGER,
-    created_at TEXT NOT NULL
-  );
-`);
-
-// Page visits table (traffic tracking)
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS page_visits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT NOT NULL,
-    page TEXT NOT NULL,
-    source TEXT,
-    medium TEXT,
-    campaign TEXT,
-    referrer TEXT,
-    user_agent TEXT,
-    created_at TEXT NOT NULL
-  );
-`);
-
-// Promo codes tables
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS promo_codes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL UNIQUE,
-    rings INTEGER NOT NULL,
-    max_uses INTEGER NOT NULL DEFAULT 1,
-    current_uses INTEGER NOT NULL DEFAULT 0,
-    expires_at TEXT,
-    created_at TEXT NOT NULL
-  );
-  CREATE TABLE IF NOT EXISTS promo_redemptions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    promo_code_id INTEGER NOT NULL,
-    user_id TEXT,
-    session_id TEXT NOT NULL,
-    redeemed_at TEXT NOT NULL
-  );
-`);
-
-export const db = drizzle(sqlite);
+export async function initializeDatabase() {
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS magic_links (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS analyses (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      user_id TEXT,
+      deck_name TEXT NOT NULL,
+      format TEXT NOT NULL,
+      decklist TEXT NOT NULL,
+      card_count INTEGER NOT NULL,
+      analysis_result TEXT,
+      mana_curve TEXT,
+      color_distribution TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS credits (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL UNIQUE,
+      user_id TEXT,
+      coins INTEGER NOT NULL DEFAULT 3
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      user_id TEXT,
+      method TEXT NOT NULL,
+      amount INTEGER NOT NULL,
+      price_paid TEXT NOT NULL,
+      tx_signature TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      token TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      email TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS newsletters (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      html_content TEXT NOT NULL,
+      social_versions TEXT,
+      mtg_data_used TEXT,
+      status TEXT NOT NULL DEFAULT 'draft',
+      sent_at TEXT,
+      recipient_count INTEGER,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS page_visits (
+      id SERIAL PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      page TEXT NOT NULL,
+      source TEXT,
+      medium TEXT,
+      campaign TEXT,
+      referrer TEXT,
+      user_agent TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS promo_codes (
+      id SERIAL PRIMARY KEY,
+      code TEXT NOT NULL UNIQUE,
+      rings INTEGER NOT NULL,
+      max_uses INTEGER NOT NULL DEFAULT 1,
+      current_uses INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS promo_redemptions (
+      id SERIAL PRIMARY KEY,
+      promo_code_id INTEGER NOT NULL,
+      user_id TEXT,
+      session_id TEXT NOT NULL,
+      redeemed_at TEXT NOT NULL
+    );
+  `);
+}
 
 export interface IStorage {
   // Users
@@ -203,89 +184,91 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // ── Users ──────────────────────────────────────────────────────────
   async createUser(id: string, email: string): Promise<User> {
-    return db
+    const [user] = await db
       .insert(users)
       .values({ id, email, createdAt: new Date().toISOString() })
-      .returning()
-      .get();
+      .returning();
+    return user;
   }
 
   async getUserById(id: string): Promise<User | undefined> {
-    return db.select().from(users).where(eq(users.id, id)).get();
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return db.select().from(users).where(eq(users.email, email)).get();
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
   }
 
   // ── Magic Links ────────────────────────────────────────────────────
   async createMagicLink(email: string, token: string, expiresAt: string): Promise<MagicLink> {
-    return db
+    const [link] = await db
       .insert(magicLinks)
       .values({ email, token, expiresAt, used: 0, createdAt: new Date().toISOString() })
-      .returning()
-      .get();
+      .returning();
+    return link;
   }
 
   async getMagicLinkByToken(token: string): Promise<MagicLink | undefined> {
-    return db.select().from(magicLinks).where(eq(magicLinks.token, token)).get();
+    const [link] = await db.select().from(magicLinks).where(eq(magicLinks.token, token));
+    return link;
   }
 
   async markMagicLinkUsed(token: string): Promise<void> {
-    db.update(magicLinks).set({ used: 1 }).where(eq(magicLinks.token, token)).run();
+    await db.update(magicLinks).set({ used: 1 }).where(eq(magicLinks.token, token));
   }
 
   // ── Analysis ───────────────────────────────────────────────────────
   async createAnalysis(analysis: InsertAnalysis): Promise<Analysis> {
-    return db.insert(analyses).values(analysis).returning().get();
+    const [result] = await db.insert(analyses).values(analysis).returning();
+    return result;
   }
 
   async getAnalysis(id: number): Promise<Analysis | undefined> {
-    return db.select().from(analyses).where(eq(analyses.id, id)).get();
+    const [result] = await db.select().from(analyses).where(eq(analyses.id, id));
+    return result;
   }
 
   async getAnalysesBySession(sessionId: string): Promise<Analysis[]> {
-    return db
+    return await db
       .select()
       .from(analyses)
       .where(eq(analyses.sessionId, sessionId))
-      .orderBy(desc(analyses.id))
-      .all();
+      .orderBy(desc(analyses.id));
   }
 
   async getAnalysesByUser(userId: string): Promise<Analysis[]> {
-    return db
+    return await db
       .select()
       .from(analyses)
       .where(eq(analyses.userId, userId))
-      .orderBy(desc(analyses.id))
-      .all();
+      .orderBy(desc(analyses.id));
   }
 
   async getAnalysesByFormat(format: string): Promise<Analysis[]> {
-    return db
+    return await db
       .select()
       .from(analyses)
       .where(eq(analyses.format, format))
-      .orderBy(desc(analyses.id))
-      .all();
+      .orderBy(desc(analyses.id));
   }
 
   // ── Credits ────────────────────────────────────────────────────────
   async getCredits(sessionId: string): Promise<Credit | undefined> {
-    return db
+    const [credit] = await db
       .select()
       .from(credits)
-      .where(eq(credits.sessionId, sessionId))
-      .get();
+      .where(eq(credits.sessionId, sessionId));
+    return credit;
   }
 
   async getCreditsByUser(userId: string): Promise<Credit | undefined> {
-    return db
+    const [credit] = await db
       .select()
       .from(credits)
-      .where(eq(credits.userId, userId))
-      .get();
+      .where(eq(credits.userId, userId));
+    return credit;
   }
 
   async initCredits(sessionId: string, userId?: string): Promise<Credit> {
@@ -296,10 +279,9 @@ export class DatabaseStorage implements IStorage {
         // If user has a credit record but on a different session, update sessionId
         // so deductCoin/addCoins work with the current session
         if (userCredit.sessionId !== sessionId) {
-          db.update(credits)
+          await db.update(credits)
             .set({ sessionId })
-            .where(eq(credits.id, userCredit.id))
-            .run();
+            .where(eq(credits.id, userCredit.id));
           return { ...userCredit, sessionId };
         }
         return userCredit;
@@ -309,10 +291,9 @@ export class DatabaseStorage implements IStorage {
     if (existing) {
       // If we have a userId and the existing record doesn't, link it
       if (userId && !existing.userId) {
-        db.update(credits)
+        await db.update(credits)
           .set({ userId })
-          .where(eq(credits.sessionId, sessionId))
-          .run();
+          .where(eq(credits.sessionId, sessionId));
         return { ...existing, userId };
       }
       return existing;
@@ -321,69 +302,61 @@ export class DatabaseStorage implements IStorage {
     // (even on an old session), DON'T give free rings again
     if (userId) {
       // Double-check: might have a row with a stale sessionId
-      const anyUserCredit = db
+      const [anyUserCredit] = await db
         .select()
         .from(credits)
-        .where(eq(credits.userId, userId))
-        .get();
+        .where(eq(credits.userId, userId));
       if (anyUserCredit) {
         // Point existing record to the current session
-        db.update(credits)
+        await db.update(credits)
           .set({ sessionId })
-          .where(eq(credits.id, anyUserCredit.id))
-          .run();
+          .where(eq(credits.id, anyUserCredit.id));
         return { ...anyUserCredit, sessionId };
       }
     }
-    return db
+    const [newCredit] = await db
       .insert(credits)
       .values({ sessionId, userId: userId ?? null, coins: 3 })
-      .returning()
-      .get();
+      .returning();
+    return newCredit;
   }
 
   async deductCoin(sessionId: string): Promise<Credit | undefined> {
     const current = await this.getCredits(sessionId);
     if (!current || current.coins <= 0) return undefined;
-    db.update(credits)
+    await db.update(credits)
       .set({ coins: current.coins - 1 })
-      .where(eq(credits.sessionId, sessionId))
-      .run();
+      .where(eq(credits.sessionId, sessionId));
     return this.getCredits(sessionId);
   }
 
   async addCoins(sessionId: string, amount: number): Promise<Credit | undefined> {
     const current = await this.initCredits(sessionId);
-    db.update(credits)
+    await db.update(credits)
       .set({ coins: current.coins + amount })
-      .where(eq(credits.sessionId, sessionId))
-      .run();
+      .where(eq(credits.sessionId, sessionId));
     return this.getCredits(sessionId);
   }
 
   // ── Session → User migration ──────────────────────────────────────
   async migrateSessionToUser(sessionId: string, userId: string): Promise<void> {
     // Link all anonymous session data to the user account
-    db.update(analyses)
+    await db.update(analyses)
       .set({ userId })
-      .where(and(eq(analyses.sessionId, sessionId), eq(analyses.userId, null as any)))
-      .run();
-    db.update(transactions)
+      .where(and(eq(analyses.sessionId, sessionId), eq(analyses.userId, null as any)));
+    await db.update(transactions)
       .set({ userId })
-      .where(and(eq(transactions.sessionId, sessionId), eq(transactions.userId, null as any)))
-      .run();
+      .where(and(eq(transactions.sessionId, sessionId), eq(transactions.userId, null as any)));
 
     // Credits: consolidate into a single row per user
-    const existingUserCredit = db
+    const [existingUserCredit] = await db
       .select()
       .from(credits)
-      .where(eq(credits.userId, userId))
-      .get();
-    const sessionCredit = db
+      .where(eq(credits.userId, userId));
+    const [sessionCredit] = await db
       .select()
       .from(credits)
-      .where(and(eq(credits.sessionId, sessionId), eq(credits.userId, null as any)))
-      .get();
+      .where(and(eq(credits.sessionId, sessionId), eq(credits.userId, null as any)));
 
     if (existingUserCredit && sessionCredit) {
       // User already had a credit row — absorb purchased rings from anonymous session
@@ -391,88 +364,85 @@ export class DatabaseStorage implements IStorage {
       // Only carry over coins above the initial 3 (purchased rings)
       const purchasedRings = Math.max(0, sessionCredit.coins - 3);
       if (purchasedRings > 0) {
-        db.update(credits)
+        await db.update(credits)
           .set({ coins: existingUserCredit.coins + purchasedRings, sessionId })
-          .where(eq(credits.id, existingUserCredit.id))
-          .run();
+          .where(eq(credits.id, existingUserCredit.id));
       } else {
         // Just update the sessionId so current session uses the existing balance
-        db.update(credits)
+        await db.update(credits)
           .set({ sessionId })
-          .where(eq(credits.id, existingUserCredit.id))
-          .run();
+          .where(eq(credits.id, existingUserCredit.id));
       }
       // Delete the orphaned anonymous credit row
-      db.delete(credits).where(eq(credits.id, sessionCredit.id)).run();
+      await db.delete(credits).where(eq(credits.id, sessionCredit.id));
     } else if (sessionCredit && !existingUserCredit) {
       // First login — just link the anonymous session to the user
-      db.update(credits)
+      await db.update(credits)
         .set({ userId })
-        .where(eq(credits.id, sessionCredit.id))
-        .run();
+        .where(eq(credits.id, sessionCredit.id));
     }
     // If existingUserCredit but no sessionCredit, nothing to do
   }
 
   // ── Auth Sessions (DB-persisted) ─────────────────────────────────────
   async createAuthSession(token: string, userId: string, email: string, expiresAt: string): Promise<AuthSession> {
-    return db.insert(authSessions).values({
+    const [session] = await db.insert(authSessions).values({
       token,
       userId,
       email,
       expiresAt,
       createdAt: new Date().toISOString(),
-    }).returning().get();
+    }).returning();
+    return session;
   }
 
   async getAuthSession(token: string): Promise<AuthSession | undefined> {
-    return db.select().from(authSessions).where(eq(authSessions.token, token)).get();
+    const [session] = await db.select().from(authSessions).where(eq(authSessions.token, token));
+    return session;
   }
 
   async deleteAuthSession(token: string): Promise<void> {
-    db.delete(authSessions).where(eq(authSessions.token, token)).run();
+    await db.delete(authSessions).where(eq(authSessions.token, token));
   }
 
   async cleanExpiredSessions(): Promise<void> {
     const now = new Date().toISOString();
-    sqlite.exec(`DELETE FROM auth_sessions WHERE expires_at < '${now}'`);
+    await db.execute(sql`DELETE FROM auth_sessions WHERE expires_at < ${now}`);
   }
 
   // ── Transactions ───────────────────────────────────────────────────
   async createTransaction(tx: InsertTransaction): Promise<Transaction> {
-    return db.insert(transactions).values(tx).returning().get();
+    const [result] = await db.insert(transactions).values(tx).returning();
+    return result;
   }
 
   async getTransactionsBySession(sessionId: string): Promise<Transaction[]> {
-    return db
+    return await db
       .select()
       .from(transactions)
       .where(eq(transactions.sessionId, sessionId))
-      .orderBy(desc(transactions.id))
-      .all();
+      .orderBy(desc(transactions.id));
   }
 
   async getTransactionsByUser(userId: string): Promise<Transaction[]> {
-    return db
+    return await db
       .select()
       .from(transactions)
       .where(eq(transactions.userId, userId))
-      .orderBy(desc(transactions.id))
-      .all();
+      .orderBy(desc(transactions.id));
   }
 
   async updateTransactionStatus(id: number, status: string, txSignature?: string): Promise<void> {
     const updates: any = { status };
     if (txSignature) updates.txSignature = txSignature;
-    db.update(transactions)
+    await db.update(transactions)
       .set(updates)
-      .where(eq(transactions.id, id))
-      .run();
+      .where(eq(transactions.id, id));
   }
 
   // ── Promo Codes ─────────────────────────────────────────────────────
   async createPromoCode(code: string, rings: number, maxUses: number, expiresAt?: string): Promise<PromoCode> {
-    return db
+    const [promo] = await db
       .insert(promoCodes)
       .values({
         code: code.toUpperCase(),
@@ -482,20 +452,21 @@ export class DatabaseStorage implements IStorage {
         expiresAt: expiresAt ?? null,
         createdAt: new Date().toISOString(),
       })
-      .returning()
-      .get();
+      .returning();
+    return promo;
   }
 
   async getPromoCode(code: string): Promise<PromoCode | undefined> {
-    return db.select().from(promoCodes).where(eq(promoCodes.code, code.toUpperCase())).get();
+    const [promo] = await db.select().from(promoCodes).where(eq(promoCodes.code, code.toUpperCase()));
+    return promo;
   }
 
   async getAllPromoCodes(): Promise<PromoCode[]> {
-    return db.select().from(promoCodes).orderBy(desc(promoCodes.id)).all();
+    return await db.select().from(promoCodes).orderBy(desc(promoCodes.id));
   }
 
   async deletePromoCode(id: number): Promise<void> {
-    db.delete(promoCodes).where(eq(promoCodes.id, id)).run();
+    await db.delete(promoCodes).where(eq(promoCodes.id, id));
   }
 
   async redeemPromoCode(code: string, sessionId: string, userId?: string): Promise<{ success: boolean; rings: number; error?: string }> {
@@ -505,31 +476,29 @@ export class DatabaseStorage implements IStorage {
     if (promo.expiresAt && new Date(promo.expiresAt) < new Date()) return { success: false, rings: 0, error: "This code has expired" };
 
     // Check if this session/user already redeemed this code
-    const existing = db.select().from(promoRedemptions)
+    const [existing] = await db.select().from(promoRedemptions)
       .where(and(
         eq(promoRedemptions.promoCodeId, promo.id),
         or(
           eq(promoRedemptions.sessionId, sessionId),
           userId ? eq(promoRedemptions.userId, userId) : undefined as any
         )
-      )).get();
+      ));
     if (existing) return { success: false, rings: 0, error: "You have already redeemed this code" };
 
     // Increment usage
-    db.update(promoCodes)
+    await db.update(promoCodes)
       .set({ currentUses: promo.currentUses + 1 })
-      .where(eq(promoCodes.id, promo.id))
-      .run();
+      .where(eq(promoCodes.id, promo.id));
 
     // Record redemption
-    db.insert(promoRedemptions)
+    await db.insert(promoRedemptions)
       .values({
         promoCodeId: promo.id,
         userId: userId ?? null,
         sessionId,
         redeemedAt: new Date().toISOString(),
-      })
-      .run();
+      });
 
     // Credit the rings
     await this.addCoins(sessionId, promo.rings);
@@ -543,47 +512,49 @@ export class DatabaseStorage implements IStorage {
     if (!user) return { success: false, error: "User not found" };
 
     // Find the user's credit record
-    const credit = db.select().from(credits).where(eq(credits.userId, user.id)).get();
+    const [credit] = await db.select().from(credits).where(eq(credits.userId, user.id));
     if (!credit) return { success: false, error: "User has no credit record (haven't visited the site yet)" };
 
     const newBalance = credit.coins + amount;
-    db.update(credits)
+    await db.update(credits)
       .set({ coins: newBalance })
-      .where(eq(credits.id, credit.id))
-      .run();
+      .where(eq(credits.id, credit.id));
 
     return { success: true, newBalance };
   }
 
   // ── Newsletters ─────────────────────────────────────────────────────
   async createNewsletter(data: InsertNewsletter): Promise<Newsletter> {
-    return db.insert(newsletters).values(data).returning().get();
+    const [newsletter] = await db.insert(newsletters).values(data).returning();
+    return newsletter;
   }
 
   async getNewsletters(): Promise<Newsletter[]> {
-    return db.select().from(newsletters).orderBy(desc(newsletters.createdAt)).all();
+    return await db.select().from(newsletters).orderBy(desc(newsletters.createdAt));
   }
 
   async getNewsletter(id: number): Promise<Newsletter | undefined> {
-    return db.select().from(newsletters).where(eq(newsletters.id, id)).get();
+    const [newsletter] = await db.select().from(newsletters).where(eq(newsletters.id, id));
+    return newsletter;
   }
 
   async updateNewsletter(id: number, data: Partial<InsertNewsletter>): Promise<Newsletter | undefined> {
-    db.update(newsletters).set(data).where(eq(newsletters.id, id)).run();
+    await db.update(newsletters).set(data).where(eq(newsletters.id, id));
     return this.getNewsletter(id);
   }
 
   async deleteNewsletter(id: number): Promise<void> {
-    db.delete(newsletters).where(eq(newsletters.id, id)).run();
+    await db.delete(newsletters).where(eq(newsletters.id, id));
   }
 
   // ── Page Visits ─────────────────────────────────────────
   async recordPageVisit(data: InsertPageVisit): Promise<PageVisit> {
-    return db.insert(pageVisits).values(data).returning().get();
+    const [visit] = await db.insert(pageVisits).values(data).returning();
+    return visit;
   }
 
   async getPageVisits(): Promise<PageVisit[]> {
-    return db.select().from(pageVisits).all();
+    return await db.select().from(pageVisits);
   }
 }
 

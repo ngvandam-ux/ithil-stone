@@ -1192,25 +1192,25 @@ export async function registerRoutes(
 
   // Admin: Get all users
   app.get("/api/admin/users", requireAdmin, async (_req, res) => {
-    const allUsers = db.select().from(usersTable).all();
+    const allUsers = await db.select().from(usersTable);
     res.json(allUsers);
   });
 
   // Admin: Get all analyses
   app.get("/api/admin/analyses", requireAdmin, async (_req, res) => {
-    const allAnalyses = db.select().from(analysesTable).orderBy(desc(analysesTable.id)).all();
+    const allAnalyses = await db.select().from(analysesTable).orderBy(desc(analysesTable.id));
     res.json(allAnalyses);
   });
 
   // Admin: Get all transactions
   app.get("/api/admin/transactions", requireAdmin, async (_req, res) => {
-    const allTx = db.select().from(transactionsTable).orderBy(desc(transactionsTable.id)).all();
+    const allTx = await db.select().from(transactionsTable).orderBy(desc(transactionsTable.id));
     res.json(allTx);
   });
 
   // Admin: Get all credits
   app.get("/api/admin/credits", requireAdmin, async (_req, res) => {
-    const allCredits = db.select().from(creditsTable).all();
+    const allCredits = await db.select().from(creditsTable);
     res.json(allCredits);
   });
 
@@ -1335,14 +1335,17 @@ export async function registerRoutes(
 
   // Admin: Dashboard stats
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
-    const totalUsers = db.select().from(usersTable).all().length;
-    const totalAnalyses = db.select().from(analysesTable).all().length;
-    const totalTransactions = db.select().from(transactionsTable).all().length;
-    const allCredits = db.select().from(creditsTable).all();
+    const allUsersArr = await db.select().from(usersTable);
+    const totalUsers = allUsersArr.length;
+    const allAnalysesArr = await db.select().from(analysesTable);
+    const totalAnalyses = allAnalysesArr.length;
+    const allTxArr = await db.select().from(transactionsTable);
+    const totalTransactions = allTxArr.length;
+    const allCredits = await db.select().from(creditsTable);
     const totalRingsInCirculation = allCredits.reduce((sum, c) => sum + c.coins, 0);
 
     // Revenue calculation
-    const confirmedTx = db.select().from(transactionsTable).all()
+    const confirmedTx = allTxArr
       .filter(t => t.status === "confirmed");
     const totalRevenue = confirmedTx.reduce((sum, t) => {
       const price = parseFloat(t.pricePaid.replace(/[^0-9.]/g, "")) || 0;
@@ -1394,9 +1397,8 @@ export async function registerRoutes(
         }
 
         // Check for duplicate processing
-        const existingTx = db.select().from(transactionsTable)
-          .where(eq(transactionsTable.txSignature, paymentIntent || `stripe_wh_${session.id}`))
-          .get();
+        const [existingTx] = await db.select().from(transactionsTable)
+          .where(eq(transactionsTable.txSignature, paymentIntent || `stripe_wh_${session.id}`));
         if (existingTx) {
           console.log(`[stripe-webhook] Already processed: ${paymentIntent}`);
           return res.json({ received: true });
@@ -1484,10 +1486,10 @@ export async function registerRoutes(
   // ── Analytics endpoint ───────────────────────────────────────────
   app.get("/api/admin/analytics", requireAdmin, async (_req, res) => {
     try {
-      const allAnalyses = db.select().from(analysesTable).all();
-      const allTx = db.select().from(transactionsTable).all();
-      const allUsers = db.select().from(usersTable).all();
-      const allCredits = db.select().from(creditsTable).all();
+      const allAnalyses = await db.select().from(analysesTable);
+      const allTx = await db.select().from(transactionsTable);
+      const allUsers = await db.select().from(usersTable);
+      const allCredits = await db.select().from(creditsTable);
 
       // Format distribution
       const formatCounts: Record<string, number> = {};
@@ -1720,9 +1722,9 @@ export async function registerRoutes(
       mtgDataSources.push({ source: "mtgjson_standard_atomic", note: "Referenced but not fetched (too large). Available at https://mtgjson.com/api/v5/StandardAtomicCards.json" });
 
       // ── 2. Gather platform analytics ───────────────────────────────
-      const allAnalyses = db.select().from(analysesTable).all();
-      const allUsers = db.select().from(usersTable).all();
-      const allTransactions = db.select().from(transactionsTable).all();
+      const allAnalyses = await db.select().from(analysesTable);
+      const allUsers = await db.select().from(usersTable);
+      const allTransactions = await db.select().from(transactionsTable);
 
       const formatCounts: Record<string, number> = {};
       for (const a of allAnalyses) {
@@ -1940,7 +1942,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
       }
 
       // Get all users with email addresses
-      const allUsers = db.select().from(usersTable).all();
+      const allUsers = await db.select().from(usersTable);
       const emails = allUsers.map(u => u.email).filter(Boolean);
 
       if (emails.length === 0) {
@@ -2077,7 +2079,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
 
   app.get("/api/admin/traffic", requireAdmin, async (_req, res) => {
     try {
-      const allVisits = db.select().from(pageVisitsTable).all();
+      const allVisits = await db.select().from(pageVisitsTable);
 
       // Group by source
       const bySource: Record<string, { visitors: number; pages: Record<string, number> }> = {};

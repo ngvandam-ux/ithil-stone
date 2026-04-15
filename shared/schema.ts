@@ -1,9 +1,9 @@
-import { sqliteTable, text, integer } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // ── Users table ──────────────────────────────────────────────────────
-export const users = sqliteTable("users", {
+export const users = pgTable("users", {
   id: text("id").primaryKey(), // UUID
   email: text("email").notNull().unique(),
   createdAt: text("created_at").notNull(),
@@ -14,8 +14,8 @@ export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
 // ── Magic links table ────────────────────────────────────────────────
-export const magicLinks = sqliteTable("magic_links", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const magicLinks = pgTable("magic_links", {
+  id: serial("id").primaryKey(),
   email: text("email").notNull(),
   token: text("token").notNull().unique(),
   expiresAt: text("expires_at").notNull(),
@@ -26,8 +26,8 @@ export const magicLinks = sqliteTable("magic_links", {
 export type MagicLink = typeof magicLinks.$inferSelect;
 
 // ── Analyses table ───────────────────────────────────────────────────
-export const analyses = sqliteTable("analyses", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const analyses = pgTable("analyses", {
+  id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull(),
   userId: text("user_id"), // null for anonymous, set when logged in
   deckName: text("deck_name").notNull(),
@@ -48,8 +48,8 @@ export type InsertAnalysis = z.infer<typeof insertAnalysisSchema>;
 export type Analysis = typeof analyses.$inferSelect;
 
 // ── Credits table ────────────────────────────────────────────────────
-export const credits = sqliteTable("credits", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const credits = pgTable("credits", {
+  id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull().unique(),
   userId: text("user_id"), // null for anonymous, set when logged in
   coins: integer("coins").notNull().default(3),
@@ -63,8 +63,8 @@ export type InsertCredit = z.infer<typeof insertCreditSchema>;
 export type Credit = typeof credits.$inferSelect;
 
 // ── Transactions table ───────────────────────────────────────────────
-export const transactions = sqliteTable("transactions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const transactions = pgTable("transactions", {
+  id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull(),
   userId: text("user_id"), // null for anonymous, set when logged in
   method: text("method").notNull(), // 'solana' | 'stripe'
@@ -83,7 +83,7 @@ export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
 
 // ── Auth sessions table (DB-persisted) ──────────────────────────────
-export const authSessions = sqliteTable("auth_sessions", {
+export const authSessions = pgTable("auth_sessions", {
   token: text("token").primaryKey(),
   userId: text("user_id").notNull(),
   email: text("email").notNull(),
@@ -94,8 +94,8 @@ export const authSessions = sqliteTable("auth_sessions", {
 export type AuthSession = typeof authSessions.$inferSelect;
 
 // ── Promo codes table ────────────────────────────────────────────────
-export const promoCodes = sqliteTable("promo_codes", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const promoCodes = pgTable("promo_codes", {
+  id: serial("id").primaryKey(),
   code: text("code").notNull().unique(),
   rings: integer("rings").notNull(),
   maxUses: integer("max_uses").notNull().default(1),
@@ -107,8 +107,8 @@ export const promoCodes = sqliteTable("promo_codes", {
 export type PromoCode = typeof promoCodes.$inferSelect;
 
 // ── Promo redemptions table ─────────────────────────────────────────
-export const promoRedemptions = sqliteTable("promo_redemptions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const promoRedemptions = pgTable("promo_redemptions", {
+  id: serial("id").primaryKey(),
   promoCodeId: integer("promo_code_id").notNull(),
   userId: text("user_id"),
   sessionId: text("session_id").notNull(),
@@ -127,8 +127,8 @@ export const deckSubmitSchema = z.object({
 export type DeckSubmit = z.infer<typeof deckSubmitSchema>;
 
 // ── Newsletters table ─────────────────────────────────────────────────
-export const newsletters = sqliteTable("newsletters", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const newsletters = pgTable("newsletters", {
+  id: serial("id").primaryKey(),
   type: text("type").notNull(), // "daily" or "weekly"
   subject: text("subject").notNull(),
   htmlContent: text("html_content").notNull(),
@@ -148,8 +148,8 @@ export type InsertNewsletter = z.infer<typeof insertNewsletterSchema>;
 export type Newsletter = typeof newsletters.$inferSelect;
 
 // ── Page visits table (traffic tracking) ─────────────────────────────
-export const pageVisits = sqliteTable("page_visits", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const pageVisits = pgTable("page_visits", {
+  id: serial("id").primaryKey(),
   sessionId: text("session_id").notNull(),
   page: text("page").notNull(), // e.g. "/", "/analyze", "/mint"
   source: text("source"), // utm_source or inferred from referrer
