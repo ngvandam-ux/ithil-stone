@@ -1730,6 +1730,7 @@ export async function registerRoutes(
         spotlightCard?: string;
         spotlightNotes?: string;
       };
+      console.log(`[newsletter/generate] type=${type}, customTopic=${!!customTopic}, newsLinks=${newsLinks ? newsLinks.length + ' chars' : 'none'}, spotlightCard=${!!spotlightCard}`);
       if (type !== "daily" && type !== "weekly") {
         return res.status(400).json({ error: 'Type must be "daily" or "weekly"' });
       }
@@ -1945,26 +1946,30 @@ ${type === "daily" ? "- Every section should make the reader think \"I should ch
       }
 
       if (newsLinks) {
-        let newsSection = `\nNEWS TO ANALYZE AND WEAVE IN:\nThe admin has provided the following news/links to incorporate into the newsletter. Analyze, highlight key takeaways, and tie them into your analysis naturally:\n\n${newsLinks}`;
+        console.log(`[newsletter] newsLinks provided (${newsLinks.length} chars), injecting as PRIMARY source`);
+        let newsSection = `\n⚠️ CRITICAL — PRIMARY NEWS SOURCE (MUST USE):\nThe admin has provided the following curated news/analysis as the PRIMARY content source for this newsletter. This content MUST be the foundation of what you write — reference specific tournaments, cards, prices, and meta shifts mentioned below. Do NOT ignore this in favor of the auto-fetched data. The auto-fetched Scryfall/mtgtop8 data below is supplementary; this admin-curated content is the real intelligence.\n\nADMIN-PROVIDED CONTENT:\n${newsLinks}`;
         if (fetchedNewsContent.length > 0) {
-          newsSection += `\n\nFETCHED ARTICLE CONTENT:\n${fetchedNewsContent.join("\n\n")}`;
+          newsSection += `\n\nFETCHED ARTICLE CONTENT (from URLs in the above):\n${fetchedNewsContent.join("\n\n")}`;
         }
+        newsSection += `\n\nREMINDER: You MUST incorporate the above admin-provided content prominently. Mention specific decks, cards, results, and prices from it. If it conflicts with auto-fetched data, prefer the admin content.`;
         extraSections.push(newsSection);
       }
 
+      // If admin provided news content, restructure prompt to prioritize it
+      const hasAdminNews = !!newsLinks;
       let newsletterPrompt = `${voice}
 
 ${structure}
 
 ${extraSections.length > 0 ? extraSections.join("\n\n") + "\n\n" : ""}${formatRules}
 
-Here is the MTG data gathered today:
+Here is supplementary MTG data gathered automatically${hasAdminNews ? " (use as SECONDARY source — the admin-provided content above is PRIMARY)" : ""}:
 ${JSON.stringify(mtgDataSources, null, 2)}
 
 Here are the platform stats:
 ${JSON.stringify(platformStats, null, 2)}
 
-OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.`;
+OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.${hasAdminNews ? " IMPORTANT: The newsletter MUST prominently feature the admin-provided news content — specific tournament results, card prices, meta shifts, and set news from it." : ""}`;
 
       const contentResponse = await anthropicClient.messages.create({
         model: "claude-opus-4-6",
