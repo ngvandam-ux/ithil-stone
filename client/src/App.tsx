@@ -12,8 +12,10 @@ import Chronicle from "@/pages/chronicle";
 import Mint from "@/pages/mint";
 import AuthVerify from "@/pages/auth-verify";
 import AppNav from "@/components/app-nav";
+import { usePageTracker } from "@/components/page-tracker";
 
 function AppRouter() {
+  usePageTracker();
   return (
     <>
       <AppNav />

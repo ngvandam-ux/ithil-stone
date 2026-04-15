@@ -146,3 +146,20 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).omit({
 
 export type InsertNewsletter = z.infer<typeof insertNewsletterSchema>;
 export type Newsletter = typeof newsletters.$inferSelect;
+
+// ── Page visits table (traffic tracking) ─────────────────────────────
+export const pageVisits = sqliteTable("page_visits", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sessionId: text("session_id").notNull(),
+  page: text("page").notNull(), // e.g. "/", "/analyze", "/mint"
+  source: text("source"), // utm_source or inferred from referrer
+  medium: text("medium"), // utm_medium
+  campaign: text("campaign"), // utm_campaign
+  referrer: text("referrer"), // raw document.referrer
+  userAgent: text("user_agent"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertPageVisitSchema = createInsertSchema(pageVisits).omit({ id: true });
+export type InsertPageVisit = z.infer<typeof insertPageVisitSchema>;
+export type PageVisit = typeof pageVisits.$inferSelect;

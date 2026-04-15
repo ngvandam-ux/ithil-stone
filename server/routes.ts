@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage";
-import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable } from "@shared/schema";
+import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable, pageVisits as pageVisitsTable } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -2005,6 +2005,105 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
     } catch (err: any) {
       console.error("Newsletter update error:", err);
       res.status(500).json({ error: "Failed to update newsletter" });
+    }
+  });
+
+  // ── Traffic tracking ──────────────────────────────────────
+
+  app.post("/api/track", async (req, res) => {
+    try {
+      const { page, source, medium, campaign, referrer } = req.body;
+      const sessionId = req.headers["x-session-id"] as string || "unknown";
+      const userAgent = req.headers["user-agent"] || "";
+
+      await storage.recordPageVisit({
+        sessionId,
+        page: page || "/",
+        source: source || null,
+        medium: medium || null,
+        campaign: campaign || null,
+        referrer: referrer || null,
+        userAgent: userAgent.substring(0, 500),
+        createdAt: new Date().toISOString(),
+      });
+
+      res.json({ ok: true });
+    } catch (err) {
+      // Don't fail silently — tracking shouldn't break the site
+      res.json({ ok: true });
+    }
+  });
+
+  app.get("/api/admin/traffic", requireAdmin, async (_req, res) => {
+    try {
+      const allVisits = db.select().from(pageVisitsTable).all();
+
+      // Group by source
+      const bySource: Record<string, { visitors: number; pages: Record<string, number> }> = {};
+      for (const v of allVisits) {
+        // Determine source label
+        let src = v.source || "direct";
+        if (!v.source && v.referrer) {
+          try {
+            const hostname = new URL(v.referrer).hostname.replace("www.", "");
+            if (hostname.includes("google")) src = "google";
+            else if (hostname.includes("reddit")) src = "reddit";
+            else if (hostname.includes("twitter") || hostname.includes("x.com")) src = "twitter";
+            else if (hostname.includes("discord")) src = "discord";
+            else if (hostname.includes("facebook") || hostname.includes("fb.com")) src = "facebook";
+            else if (hostname.includes("bluesky") || hostname.includes("bsky")) src = "bluesky";
+            else if (hostname.includes("youtube")) src = "youtube";
+            else src = hostname;
+          } catch { src = "unknown"; }
+        }
+
+        if (!bySource[src]) bySource[src] = { visitors: 0, pages: {} };
+        bySource[src].visitors++;
+        bySource[src].pages[v.page] = (bySource[src].pages[v.page] || 0) + 1;
+      }
+
+      // Sort by visitors desc
+      const sources = Object.entries(bySource)
+        .map(([source, data]) => ({ source, ...data }))
+        .sort((a, b) => b.visitors - a.visitors);
+
+      // Daily visits (last 30 days)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const recentVisits = allVisits.filter(v => v.createdAt > thirtyDaysAgo);
+      const dailyVisits: Record<string, number> = {};
+      for (const v of recentVisits) {
+        const day = v.createdAt.split("T")[0];
+        dailyVisits[day] = (dailyVisits[day] || 0) + 1;
+      }
+
+      // By campaign
+      const byCampaign: Record<string, number> = {};
+      for (const v of allVisits) {
+        if (v.campaign) {
+          byCampaign[v.campaign] = (byCampaign[v.campaign] || 0) + 1;
+        }
+      }
+
+      // Unique sessions
+      const uniqueSessions = new Set(allVisits.map(v => v.sessionId)).size;
+
+      // By page
+      const byPage: Record<string, number> = {};
+      for (const v of allVisits) {
+        byPage[v.page] = (byPage[v.page] || 0) + 1;
+      }
+
+      res.json({
+        totalVisits: allVisits.length,
+        uniqueVisitors: uniqueSessions,
+        sources,
+        dailyVisits,
+        byCampaign,
+        byPage,
+      });
+    } catch (err: any) {
+      console.error("Traffic analytics error:", err);
+      res.status(500).json({ error: "Failed to generate traffic analytics" });
     }
   });
 

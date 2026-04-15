@@ -12,6 +12,8 @@ import {
   type PromoRedemption,
   type Newsletter,
   type InsertNewsletter,
+  type PageVisit,
+  type InsertPageVisit,
   analyses,
   credits,
   transactions,
@@ -21,6 +23,7 @@ import {
   promoCodes,
   promoRedemptions,
   newsletters,
+  pageVisits,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -108,6 +111,21 @@ sqlite.exec(`
   );
 `);
 
+// Page visits table (traffic tracking)
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS page_visits (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    page TEXT NOT NULL,
+    source TEXT,
+    medium TEXT,
+    campaign TEXT,
+    referrer TEXT,
+    user_agent TEXT,
+    created_at TEXT NOT NULL
+  );
+`);
+
 // Promo codes tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS promo_codes (
@@ -176,6 +194,10 @@ export interface IStorage {
   getNewsletter(id: number): Promise<Newsletter | undefined>;
   updateNewsletter(id: number, data: Partial<InsertNewsletter>): Promise<Newsletter | undefined>;
   deleteNewsletter(id: number): Promise<void>;
+
+  // Page visits
+  recordPageVisit(data: InsertPageVisit): Promise<PageVisit>;
+  getPageVisits(): Promise<PageVisit[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -553,6 +575,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNewsletter(id: number): Promise<void> {
     db.delete(newsletters).where(eq(newsletters.id, id)).run();
+  }
+
+  // ── Page Visits ─────────────────────────────────────────
+  async recordPageVisit(data: InsertPageVisit): Promise<PageVisit> {
+    return db.insert(pageVisits).values(data).returning().get();
+  }
+
+  async getPageVisits(): Promise<PageVisit[]> {
+    return db.select().from(pageVisits).all();
   }
 }
 
