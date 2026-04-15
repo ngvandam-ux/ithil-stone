@@ -2178,9 +2178,6 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
       if (!newsletter) {
         return res.status(404).json({ error: "Newsletter not found" });
       }
-      if (newsletter.status === "sent") {
-        return res.status(400).json({ error: "Cannot delete a sent newsletter" });
-      }
 
       await storage.deleteNewsletter(id);
       res.json({ success: true });
