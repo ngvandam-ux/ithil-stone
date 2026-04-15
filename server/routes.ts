@@ -1809,7 +1809,7 @@ OUTPUT: Return ONLY the newsletter body content as clean text with markdown-styl
       }
 
       const contentResponse = await anthropicClient.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-opus-4-6",
         max_tokens: 4000,
         messages: [{ role: "user", content: newsletterPrompt }],
       });
@@ -1837,7 +1837,7 @@ ${markdownContent}
 OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the JSON object.`;
 
         const socialResponse = await anthropicClient.messages.create({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-opus-4-6",
           max_tokens: 2000,
           messages: [{ role: "user", content: socialPrompt }],
         });
