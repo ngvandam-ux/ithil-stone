@@ -125,3 +125,24 @@ export const deckSubmitSchema = z.object({
 });
 
 export type DeckSubmit = z.infer<typeof deckSubmitSchema>;
+
+// ── Newsletters table ─────────────────────────────────────────────────
+export const newsletters = sqliteTable("newsletters", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  type: text("type").notNull(), // "daily" or "weekly"
+  subject: text("subject").notNull(),
+  htmlContent: text("html_content").notNull(),
+  socialVersions: text("social_versions"), // JSON string with discord, bluesky, x, reddit versions
+  mtgDataUsed: text("mtg_data_used"), // JSON string of sources/data gathered
+  status: text("status").notNull().default("draft"), // draft, sent
+  sentAt: text("sent_at"),
+  recipientCount: integer("recipient_count"),
+  createdAt: text("created_at").notNull(),
+});
+
+export const insertNewsletterSchema = createInsertSchema(newsletters).omit({
+  id: true,
+});
+
+export type InsertNewsletter = z.infer<typeof insertNewsletterSchema>;
+export type Newsletter = typeof newsletters.$inferSelect;

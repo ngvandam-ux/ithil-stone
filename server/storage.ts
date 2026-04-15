@@ -10,6 +10,8 @@ import {
   type AuthSession,
   type PromoCode,
   type PromoRedemption,
+  type Newsletter,
+  type InsertNewsletter,
   analyses,
   credits,
   transactions,
@@ -18,6 +20,7 @@ import {
   authSessions,
   promoCodes,
   promoRedemptions,
+  newsletters,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import Database from "better-sqlite3";
@@ -89,6 +92,22 @@ sqlite.exec(`
   );
 `);
 
+// Newsletters table
+sqlite.exec(`
+  CREATE TABLE IF NOT EXISTS newsletters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    type TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    html_content TEXT NOT NULL,
+    social_versions TEXT,
+    mtg_data_used TEXT,
+    status TEXT NOT NULL DEFAULT 'draft',
+    sent_at TEXT,
+    recipient_count INTEGER,
+    created_at TEXT NOT NULL
+  );
+`);
+
 // Promo codes tables
 sqlite.exec(`
   CREATE TABLE IF NOT EXISTS promo_codes (
@@ -150,6 +169,13 @@ export interface IStorage {
   getTransactionsBySession(sessionId: string): Promise<Transaction[]>;
   getTransactionsByUser(userId: string): Promise<Transaction[]>;
   updateTransactionStatus(id: number, status: string, txSignature?: string): Promise<void>;
+
+  // Newsletters
+  createNewsletter(data: InsertNewsletter): Promise<Newsletter>;
+  getNewsletters(): Promise<Newsletter[]>;
+  getNewsletter(id: number): Promise<Newsletter | undefined>;
+  updateNewsletter(id: number, data: Partial<InsertNewsletter>): Promise<Newsletter | undefined>;
+  deleteNewsletter(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -505,6 +531,28 @@ export class DatabaseStorage implements IStorage {
       .run();
 
     return { success: true, newBalance };
+  }
+
+  // ── Newsletters ─────────────────────────────────────────────────────
+  async createNewsletter(data: InsertNewsletter): Promise<Newsletter> {
+    return db.insert(newsletters).values(data).returning().get();
+  }
+
+  async getNewsletters(): Promise<Newsletter[]> {
+    return db.select().from(newsletters).orderBy(desc(newsletters.createdAt)).all();
+  }
+
+  async getNewsletter(id: number): Promise<Newsletter | undefined> {
+    return db.select().from(newsletters).where(eq(newsletters.id, id)).get();
+  }
+
+  async updateNewsletter(id: number, data: Partial<InsertNewsletter>): Promise<Newsletter | undefined> {
+    db.update(newsletters).set(data).where(eq(newsletters.id, id)).run();
+    return this.getNewsletter(id);
+  }
+
+  async deleteNewsletter(id: number): Promise<void> {
+    db.delete(newsletters).where(eq(newsletters.id, id)).run();
   }
 }
 

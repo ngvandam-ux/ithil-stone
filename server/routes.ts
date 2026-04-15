@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage";
-import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable } from "@shared/schema";
+import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -1177,7 +1177,7 @@ export async function registerRoutes(
   app.use("/api/admin", (req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-admin-secret");
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     if (req.method === "OPTIONS") return res.sendStatus(200);
     next();
   });
@@ -1520,6 +1520,491 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Analytics error:", err);
       res.status(500).json({ error: "Failed to generate analytics" });
+    }
+  });
+
+  // ── Newsletter Engine ────────────────────────────────────────────────
+
+  const BASIC_LANDS = new Set([
+    "plains", "island", "swamp", "mountain", "forest", "wastes",
+    "snow-covered plains", "snow-covered island", "snow-covered swamp",
+    "snow-covered mountain", "snow-covered forest",
+  ]);
+
+  const TOLKIEN_ART = [
+    "fingolfin-morgoth", "rohirrim-charge", "gandalf-counsel", "palantir",
+    "mordor-fortress", "fellowship-road", "duel-of-songs", "star-hope",
+    "feanor-oath", "sword-reforged",
+  ];
+
+  async function fetchScryfallCard(cardName: string): Promise<{ name: string; artCrop: string } | null> {
+    if (BASIC_LANDS.has(cardName.toLowerCase())) return null;
+    try {
+      const res = await fetch(
+        `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cardName.trim())}`
+      );
+      if (!res.ok) return null;
+      const data = await res.json();
+      const artCrop = data.image_uris?.art_crop || data.card_faces?.[0]?.image_uris?.art_crop;
+      if (!artCrop) return null;
+      return { name: data.name, artCrop };
+    } catch {
+      return null;
+    }
+  }
+
+  function buildNewsletterHtml(
+    markdownContent: string,
+    cardImageMap: Record<string, string>,
+    type: "daily" | "weekly"
+  ): string {
+    const title = type === "daily" ? "The Seeing-Stone" : "The Palantír Report";
+    const heroArt = TOLKIEN_ART[Math.floor(Math.random() * TOLKIEN_ART.length)];
+    const heroUrl = `${APP_URL}/art/tolkien-${heroArt}.jpg`;
+
+    // Convert markdown-style formatting to HTML
+    let html = markdownContent
+      // Headers
+      .replace(/^## (.+)$/gm, '<h2 style="color:#4ade80; font-variant:small-caps; letter-spacing:1px; font-size:18px; margin:28px 0 12px; border-bottom:1px solid rgba(74,222,128,0.15); padding-bottom:6px;">$1</h2>')
+      .replace(/^### (.+)$/gm, '<h3 style="color:#e2e8e2; font-size:15px; margin:20px 0 8px;">$1</h3>')
+      // Bold text
+      .replace(/\*\*(.+?)\*\*/g, (_, cardName) => {
+        const imgUrl = cardImageMap[cardName];
+        if (imgUrl) {
+          return `<strong style="color:#e2e8e2;">${cardName}</strong><br/><img src="${imgUrl}" alt="${cardName}" width="200" style="border-radius:8px; border:1px solid rgba(74,222,128,0.3); margin:8px 0; display:block;" />`;
+        }
+        return `<strong style="color:#e2e8e2;">${cardName}</strong>`;
+      })
+      // Bullet points
+      .replace(/^- (.+)$/gm, '<div style="padding-left:16px; margin:4px 0;"><span style="color:#4ade80; margin-right:6px;">•</span>$1</div>')
+      // Line breaks
+      .replace(/\n\n/g, '</p><p style="margin:12px 0; line-height:1.65;">')
+      .replace(/\n/g, '<br/>');
+
+    html = `<p style="margin:12px 0; line-height:1.65;">${html}</p>`;
+
+    return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0; padding:0; background:#0a0f0a; font-family:Georgia,'Times New Roman',serif; color:#c8cfc8;">
+<div style="max-width:600px; margin:0 auto; background:#0a0f0a;">
+  <!-- Hero -->
+  <div style="position:relative; text-align:center;">
+    <img src="${heroUrl}" alt="${title}" width="600" style="width:100%; display:block; opacity:0.7;" />
+    <div style="position:absolute; bottom:20px; left:0; right:0; text-align:center;">
+      <h1 style="color:#4ade80; font-size:28px; font-variant:small-caps; letter-spacing:3px; margin:0; text-shadow:0 2px 12px rgba(0,0,0,0.8);">${title}</h1>
+      <p style="color:#8a9a8a; font-size:12px; margin:4px 0 0; text-shadow:0 1px 6px rgba(0,0,0,0.8);">${type === "daily" ? "Daily MTG Intelligence" : "Weekly Strategic Briefing"} · ithilstone.gg</p>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div style="padding:24px 28px; font-size:15px; line-height:1.65;">
+    ${html}
+  </div>
+
+  <!-- CTA -->
+  <div style="text-align:center; padding:20px 28px 32px;">
+    <a href="${APP_URL}" style="display:inline-block; padding:14px 32px; background:#166534; color:#fff; text-decoration:none; border-radius:8px; font-size:15px; font-weight:600; letter-spacing:0.5px;">Consult the Stone →</a>
+  </div>
+
+  <!-- Footer -->
+  <div style="padding:20px 28px; border-top:1px solid rgba(74,222,128,0.1); text-align:center;">
+    <p style="font-size:12px; color:#3a4a3a; margin:0;">The Seeing-Stone — <a href="${APP_URL}" style="color:#4ade80; text-decoration:none;">ithilstone.gg</a></p>
+    <p style="font-size:11px; color:#2a3a2a; margin:8px 0 0;"><a href="{{unsubscribe_url}}" style="color:#2a3a2a; text-decoration:underline;">Unsubscribe</a></p>
+  </div>
+</div>
+</body>
+</html>`;
+  }
+
+  // POST /api/admin/newsletter/generate
+  app.post("/api/admin/newsletter/generate", requireAdmin, async (req, res) => {
+    try {
+      const { type = "daily", customTopic } = req.body as { type?: "daily" | "weekly"; customTopic?: string };
+      if (type !== "daily" && type !== "weekly") {
+        return res.status(400).json({ error: 'Type must be "daily" or "weekly"' });
+      }
+
+      // ── 1. Gather MTG data from the web ────────────────────────────
+      const mtgDataSources: any[] = [];
+      const cardNames: string[] = [];
+
+      // Fetch a few random recent notable cards from Scryfall
+      for (let i = 0; i < 3; i++) {
+        try {
+          const r = await fetch("https://api.scryfall.com/cards/random?q=is:firstprinting+date%3E2026-01-01");
+          if (r.ok) {
+            const card = await r.json();
+            mtgDataSources.push({ source: "scryfall_random", card: { name: card.name, type_line: card.type_line, mana_cost: card.mana_cost, oracle_text: card.oracle_text, set_name: card.set_name, rarity: card.rarity } });
+            if (card.name && !BASIC_LANDS.has(card.name.toLowerCase())) {
+              cardNames.push(card.name);
+            }
+          }
+          // Rate limit: ~100ms between Scryfall calls
+          await new Promise(r => setTimeout(r, 120));
+        } catch { /* graceful degradation */ }
+      }
+
+      // Try recent cards search
+      try {
+        const r = await fetch("https://api.scryfall.com/cards/search?q=date%3E2026-03-01+is:firstprinting&order=review&dir=desc");
+        if (r.ok) {
+          const data = await r.json();
+          const topCards = (data.data || []).slice(0, 5);
+          for (const card of topCards) {
+            mtgDataSources.push({ source: "scryfall_recent", card: { name: card.name, type_line: card.type_line, mana_cost: card.mana_cost, oracle_text: card.oracle_text, set_name: card.set_name, rarity: card.rarity } });
+            if (card.name && !BASIC_LANDS.has(card.name.toLowerCase())) {
+              cardNames.push(card.name);
+            }
+          }
+        }
+      } catch { /* graceful degradation */ }
+
+      // Try mtgtop8 for competitive data
+      let mtgtop8Standard = "";
+      let mtgtop8Modern = "";
+      try {
+        const r = await fetch("https://www.mtgtop8.com/topcards?f=ST&meession=15");
+        if (r.ok) mtgtop8Standard = (await r.text()).slice(0, 3000);
+      } catch { /* graceful degradation */ }
+      try {
+        const r = await fetch("https://www.mtgtop8.com/topcards?f=MO&meession=15");
+        if (r.ok) mtgtop8Modern = (await r.text()).slice(0, 3000);
+      } catch { /* graceful degradation */ }
+
+      if (mtgtop8Standard) mtgDataSources.push({ source: "mtgtop8_standard", raw: mtgtop8Standard.slice(0, 1500) });
+      if (mtgtop8Modern) mtgDataSources.push({ source: "mtgtop8_modern", raw: mtgtop8Modern.slice(0, 1500) });
+
+      // Note StandardAtomicCards as a data source (too large to fetch)
+      mtgDataSources.push({ source: "mtgjson_standard_atomic", note: "Referenced but not fetched (too large). Available at https://mtgjson.com/api/v5/StandardAtomicCards.json" });
+
+      // ── 2. Gather platform analytics ───────────────────────────────
+      const allAnalyses = db.select().from(analysesTable).all();
+      const allUsers = db.select().from(usersTable).all();
+      const allTransactions = db.select().from(transactionsTable).all();
+
+      const formatCounts: Record<string, number> = {};
+      for (const a of allAnalyses) {
+        formatCounts[a.format] = (formatCounts[a.format] || 0) + 1;
+      }
+      const topFormats = Object.entries(formatCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([f, c]) => `${f}: ${c}`);
+
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const recentAnalyses = allAnalyses.filter(a => a.createdAt > sevenDaysAgo);
+      const recentTx = allTransactions.filter(t => t.createdAt > sevenDaysAgo);
+
+      const platformStats = {
+        totalAnalyses: allAnalyses.length,
+        totalUsers: allUsers.length,
+        analysesThisWeek: recentAnalyses.length,
+        transactionsThisWeek: recentTx.length,
+        topFormats,
+        mostPopularFormat: topFormats[0] || "unknown",
+      };
+
+      // ── 3. Fetch card images ───────────────────────────────────────
+      const uniqueCardNames = [...new Set(cardNames)];
+      const cardImageMap: Record<string, string> = {};
+      for (let i = 0; i < Math.min(uniqueCardNames.length, 8); i++) {
+        const result = await fetchScryfallCard(uniqueCardNames[i]);
+        if (result) {
+          cardImageMap[result.name] = result.artCrop;
+        }
+        // Rate limit Scryfall
+        await new Promise(r => setTimeout(r, 120));
+      }
+
+      // ── 4. Call Claude to write the newsletter ─────────────────────
+      const anthropicClient = new Anthropic();
+
+      let newsletterPrompt: string;
+      if (type === "daily") {
+        newsletterPrompt = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
+
+Your editorial voice: You're a grizzled old-school tournament Magic player who's been playing since Revised edition in 1994. You think modern card design is pushed and overpowered — too much crazy value stapled onto cards for free. You miss when Magic was about tight play decisions and smart deckbuilding, not who drew their busted mythic first. But you grudgingly respect when new cards earn it through clever design. You speak like a wise war counselor who's fought every meta since the game began.
+
+Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.
+
+Write a daily newsletter in Axios-style format. Short, punchy, scannable. Under 1,000 words.
+
+STRUCTURE (use these exact section headers with numbered format):
+1. 1 big thing: [compelling headline]
+   - Bold opening sentence
+   - "Why it matters:" bullet
+   - "By the numbers:" or "Yes, but:" if relevant
+
+2. Meta pulse
+   - 2-3 short bullet-point takes on competitive play
+   - Bold the card names (but NOT land cards)
+
+3. The spoon: [catchy one-liner headline]
+   - One interesting/weird/fun thing from the MTG world
+
+4. From the Stone
+   - One-liner platform stat teaser linking back to ithilstone.gg
+   - e.g. "247 Commander decks analyzed this week. Most common mistake? [insight]"
+
+${customTopic ? `CUSTOM TOPIC FOCUS: ${customTopic}\n\n` : ""}FORMAT RULES:
+- Bold card names like **Lightning Bolt** (but never land cards like Plains, Island, etc.)
+- Keep it conversational and opinionated
+- Every section should make the reader think "I should check my deck"
+- End with a subtle CTA to ithilstone.gg
+
+Here is the MTG data gathered today:
+${JSON.stringify(mtgDataSources, null, 2)}
+
+Here are the platform stats:
+${JSON.stringify(platformStats, null, 2)}
+
+OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.`;
+      } else {
+        newsletterPrompt = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
+
+Your editorial voice: You're a grizzled old-school tournament Magic player who's been playing since Revised edition in 1994. You think modern card design is pushed and overpowered — too much crazy value stapled onto cards for free. You miss when Magic was about tight play decisions and smart deckbuilding, not who drew their busted mythic first. But you grudgingly respect when new cards earn it through clever design. You speak like a wise war counselor who's fought every meta since the game began.
+
+Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.
+
+Write a weekly newsletter called "The Palantír Report". This is the deep-dive strategic briefing. Roughly 2,000-2,500 words.
+
+STRUCTURE:
+## Tournament Recap
+- Summary of notable competitive results this week
+- Bold winning deck archetypes and key cards
+
+## Format Deep-Dive
+- Pick one format and go deep on its current state
+- What's rising, what's falling, what's being slept on
+
+## Card Watch
+- 3-4 cards that are moving (up or down) in relevance
+- Brief take on each with reasoning
+
+## Combo of the Week
+- One spicy or underexplored combo
+- Cards involved, how it works, where to play it
+
+## The Forge Report
+- Platform stats and insights from ithilstone.gg analyses
+- What are users building? What formats dominate?
+
+## Interesting Finds
+- 2-3 weird, cool, or notable things from the MTG world this week
+
+${customTopic ? `CUSTOM TOPIC FOCUS: ${customTopic}\n\n` : ""}FORMAT RULES:
+- Bold card names like **Lightning Bolt** (but never land cards like Plains, Island, etc.)
+- Keep it conversational and opinionated
+- Deep analysis, not surface-level recaps
+- End with a subtle CTA to ithilstone.gg
+
+Here is the MTG data gathered today:
+${JSON.stringify(mtgDataSources, null, 2)}
+
+Here are the platform stats:
+${JSON.stringify(platformStats, null, 2)}
+
+OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.`;
+      }
+
+      const contentResponse = await anthropicClient.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        messages: [{ role: "user", content: newsletterPrompt }],
+      });
+
+      const contentBlock = contentResponse.content.find((b: any) => b.type === "text");
+      const markdownContent = (contentBlock as any)?.text || "Newsletter generation failed — no content returned.";
+
+      // ── 5. Convert to HTML ─────────────────────────────────────────
+      const htmlContent = buildNewsletterHtml(markdownContent, cardImageMap, type);
+
+      // ── 6. Generate social media versions ──────────────────────────
+      let socialVersions: any = null;
+      try {
+        const socialPrompt = `Based on this newsletter content, generate condensed social media versions for each platform. Return a JSON object with keys: discord, bluesky, x, reddit.
+
+Rules:
+- discord: embed-style message with the lead story + 2 bullet takes. Use markdown formatting.
+- bluesky: array of 3-4 posts, each under 300 characters. Lead with the spiciest take.
+- x: array of 3-4 tweets, each under 280 characters. Thread format with 1/ 2/ 3/ numbering.
+- reddit: long-form post for r/magicTCG with genuine community voice (not marketing-speak). Include a title field.
+
+Newsletter content:
+${markdownContent}
+
+OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the JSON object.`;
+
+        const socialResponse = await anthropicClient.messages.create({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          messages: [{ role: "user", content: socialPrompt }],
+        });
+
+        const socialBlock = socialResponse.content.find((b: any) => b.type === "text");
+        const socialText = (socialBlock as any)?.text || "";
+        // Try to parse JSON, stripping potential markdown fences
+        const cleaned = socialText.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
+        socialVersions = JSON.parse(cleaned);
+      } catch (err) {
+        console.warn("Social media version generation failed:", err);
+        socialVersions = { error: "Generation failed — edit manually" };
+      }
+
+      // ── 7. Derive subject line ─────────────────────────────────────
+      const firstLine = markdownContent.split("\n").find((l: string) => l.trim().length > 10) || "";
+      const subject = type === "daily"
+        ? `The Seeing-Stone — ${firstLine.replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(0, 80)}`
+        : `The Palantír Report — ${firstLine.replace(/^#+\s*/, "").replace(/\*\*/g, "").slice(0, 80)}`;
+
+      // ── 8. Save to database ────────────────────────────────────────
+      const newsletter = await storage.createNewsletter({
+        type,
+        subject,
+        htmlContent,
+        socialVersions: JSON.stringify(socialVersions),
+        mtgDataUsed: JSON.stringify(mtgDataSources),
+        status: "draft",
+        sentAt: null,
+        recipientCount: null,
+        createdAt: new Date().toISOString(),
+      });
+
+      res.json(newsletter);
+    } catch (err: any) {
+      console.error("Newsletter generation error:", err);
+      res.status(500).json({ error: "Failed to generate newsletter: " + (err.message || "Unknown error") });
+    }
+  });
+
+  // POST /api/admin/newsletter/send
+  app.post("/api/admin/newsletter/send", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.body as { id: number };
+      if (!id || typeof id !== "number") {
+        return res.status(400).json({ error: "Newsletter id is required" });
+      }
+
+      const newsletter = await storage.getNewsletter(id);
+      if (!newsletter) {
+        return res.status(404).json({ error: "Newsletter not found" });
+      }
+      if (newsletter.status === "sent") {
+        return res.status(400).json({ error: "Newsletter has already been sent" });
+      }
+
+      if (!resend) {
+        return res.status(500).json({ error: "Resend email client not configured (missing RESEND_API_KEY)" });
+      }
+
+      // Get all users with email addresses
+      const allUsers = db.select().from(usersTable).all();
+      const emails = allUsers.map(u => u.email).filter(Boolean);
+
+      if (emails.length === 0) {
+        return res.status(400).json({ error: "No users with email addresses found" });
+      }
+
+      // Send via Resend batch API (max 100 per batch)
+      const batchSize = 100;
+      let sentCount = 0;
+      for (let i = 0; i < emails.length; i += batchSize) {
+        const batch = emails.slice(i, i + batchSize);
+        const emailPayloads = batch.map(email => ({
+          from: "Ithil-stone <noreply@ithilstone.gg>",
+          to: email,
+          subject: newsletter.subject,
+          html: newsletter.htmlContent,
+        }));
+
+        try {
+          await resend.batch.send(emailPayloads);
+          sentCount += batch.length;
+        } catch (batchErr: any) {
+          console.error(`Batch send error (batch starting at ${i}):`, batchErr);
+          // Continue with remaining batches
+        }
+      }
+
+      // Update newsletter status
+      await storage.updateNewsletter(id, {
+        status: "sent",
+        sentAt: new Date().toISOString(),
+        recipientCount: sentCount,
+      } as any);
+
+      res.json({ success: true, recipientCount: sentCount, totalUsers: emails.length });
+    } catch (err: any) {
+      console.error("Newsletter send error:", err);
+      res.status(500).json({ error: "Failed to send newsletter: " + (err.message || "Unknown error") });
+    }
+  });
+
+  // GET /api/admin/newsletter/history
+  app.get("/api/admin/newsletter/history", requireAdmin, async (_req, res) => {
+    try {
+      const newsletters = await storage.getNewsletters();
+      res.json(newsletters);
+    } catch (err: any) {
+      console.error("Newsletter history error:", err);
+      res.status(500).json({ error: "Failed to fetch newsletter history" });
+    }
+  });
+
+  // DELETE /api/admin/newsletter/:id
+  app.delete("/api/admin/newsletter/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+      const newsletter = await storage.getNewsletter(id);
+      if (!newsletter) {
+        return res.status(404).json({ error: "Newsletter not found" });
+      }
+      if (newsletter.status === "sent") {
+        return res.status(400).json({ error: "Cannot delete a sent newsletter" });
+      }
+
+      await storage.deleteNewsletter(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      console.error("Newsletter delete error:", err);
+      res.status(500).json({ error: "Failed to delete newsletter" });
+    }
+  });
+
+  // PUT /api/admin/newsletter/:id
+  app.put("/api/admin/newsletter/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id, 10);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+
+      const newsletter = await storage.getNewsletter(id);
+      if (!newsletter) {
+        return res.status(404).json({ error: "Newsletter not found" });
+      }
+      if (newsletter.status === "sent") {
+        return res.status(400).json({ error: "Cannot edit a sent newsletter" });
+      }
+
+      const { htmlContent, socialVersions, subject } = req.body;
+      const updates: any = {};
+      if (htmlContent !== undefined) updates.htmlContent = htmlContent;
+      if (socialVersions !== undefined) {
+        updates.socialVersions = typeof socialVersions === "string" ? socialVersions : JSON.stringify(socialVersions);
+      }
+      if (subject !== undefined) updates.subject = subject;
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+
+      const updated = await storage.updateNewsletter(id, updates);
+      res.json(updated);
+    } catch (err: any) {
+      console.error("Newsletter update error:", err);
+      res.status(500).json({ error: "Failed to update newsletter" });
     }
   });
 
