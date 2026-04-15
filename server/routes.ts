@@ -1993,9 +1993,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
       if (!newsletter) {
         return res.status(404).json({ error: "Newsletter not found" });
       }
-      if (newsletter.status === "sent") {
-        return res.status(400).json({ error: "Newsletter has already been sent" });
-      }
+      const isResend = newsletter.status === "sent";
 
       if (!resend) {
         return res.status(500).json({ error: "Resend email client not configured (missing RESEND_API_KEY)" });
@@ -2045,7 +2043,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
         recipientCount: sentCount,
       } as any);
 
-      res.json({ success: true, recipientCount: sentCount, totalUsers: emails.length });
+      res.json({ success: true, recipientCount: sentCount, totalUsers: emails.length, resent: isResend });
     } catch (err: any) {
       console.error("Newsletter send error:", err);
       res.status(500).json({ error: "Failed to send newsletter: " + (err.message || "Unknown error") });
