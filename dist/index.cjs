@@ -356,7 +356,7 @@ CRITICAL FORMAT RULES:
 `)}}catch{return null}}function UB(e){let t=[],r=[],n=/<Cards[^>]*?Quantity="(\d+)"[^>]*?Sideboard="(true|false)"[^>]*?Name="([^"]+)"[^>]*?\/>/gi,i=/<Cards[^>]*?Name="([^"]+)"[^>]*?Quantity="(\d+)"[^>]*?Sideboard="(true|false)"[^>]*?\/>/gi,a;for(;(a=n.exec(e))!==null;){let o=a[1],l=a[2]==="true",p=a[3];l?r.push(`${o} ${p}`):t.push(`${o} ${p}`)}if(t.length===0&&r.length===0)for(;(a=i.exec(e))!==null;){let o=a[1],l=a[2];a[3]==="true"?r.push(`${l} ${o}`):t.push(`${l} ${o}`)}let s=[...t];return r.length>0&&s.push("","Sideboard",...r),s.join(`
 `)}function r4(e){return e.split(`
 `).map(t=>{let r=t.trim();if(!r||r.startsWith("//")||r.startsWith("#"))return r;let n=r.toLowerCase();if(n==="deck"||n==="deck:"||n==="sideboard"||n==="sideboard:"||n==="commander"||n==="commander:"||n==="companion"||n==="companion:")return r;let i=r.match(/^(\d+)\s*x?\s+(.+?)\s+\([A-Z0-9]+\)\s*\d*\s*$/i);return i?`${i[1]} ${i[2].trim()}`:r}).join(`
-`)}async function i4(e,t){t.get("/api/version",(c,d)=>{d.json({version:"voice-v2",deployed:new Date().toISOString()})}),t.use((c,d,u)=>{c.headers["x-session-id"]||(c.headers["x-session-id"]=(0,Ja.randomUUID)());let f=c.headers["x-auth-token"];if(f){N.getAuthSession(f).then(h=>{h&&new Date(h.expiresAt)>new Date?(c.userId=h.userId,c.userEmail=h.email):h&&N.deleteAuthSession(f),u()}).catch(()=>u());return}u()}),t.post("/api/auth/send-link",async(c,d)=>{try{let{email:u}=c.body;if(!u||typeof u!="string"||!u.includes("@"))return d.status(400).json({error:"Valid email required"});let f=u.toLowerCase().trim(),h=ZA(),g=new Date(Date.now()+XA*60*1e3).toISOString();await N.createMagicLink(f,h,g);let v=`${ji}/#/auth/verify/${h}`;if(qi){let x=[{img:"tolkien-palantir.jpg",quote:"The palant\xEDri are not all accounted for. We do not know who else may be watching.",attr:"Gandalf"},{img:"tolkien-gandalf-counsel.jpg",quote:"He that breaks a thing to find out what it is has left the path of wisdom.",attr:"Gandalf"},{img:"tolkien-star-hope.jpg",quote:"There, peeping among the cloud-wrack, Sam saw a white star twinkle for a while.",attr:"The Return of the King"},{img:"tolkien-sword-reforged.jpg",quote:"Renewed shall be blade that was broken, the crownless again shall be king.",attr:"The Riddle of Strider"},{img:"tolkien-fellowship-road.jpg",quote:"Faithless is he that says farewell when the road darkens.",attr:"Gimli"}],w=x[Math.floor(Math.random()*x.length)],_=`${ji}/art/${w.img}`;await qi.emails.send({from:"Ithil-stone <noreply@ithilstone.gg>",to:f,subject:"Your key to the seeing-stone",html:`
+`)}async function i4(e,t){t.get("/api/version",(c,d)=>{d.json({version:"barry-pratchett-v1",deployed:new Date().toISOString()})}),t.use((c,d,u)=>{c.headers["x-session-id"]||(c.headers["x-session-id"]=(0,Ja.randomUUID)());let f=c.headers["x-auth-token"];if(f){N.getAuthSession(f).then(h=>{h&&new Date(h.expiresAt)>new Date?(c.userId=h.userId,c.userEmail=h.email):h&&N.deleteAuthSession(f),u()}).catch(()=>u());return}u()}),t.post("/api/auth/send-link",async(c,d)=>{try{let{email:u}=c.body;if(!u||typeof u!="string"||!u.includes("@"))return d.status(400).json({error:"Valid email required"});let f=u.toLowerCase().trim(),h=ZA(),g=new Date(Date.now()+XA*60*1e3).toISOString();await N.createMagicLink(f,h,g);let v=`${ji}/#/auth/verify/${h}`;if(qi){let x=[{img:"tolkien-palantir.jpg",quote:"The palant\xEDri are not all accounted for. We do not know who else may be watching.",attr:"Gandalf"},{img:"tolkien-gandalf-counsel.jpg",quote:"He that breaks a thing to find out what it is has left the path of wisdom.",attr:"Gandalf"},{img:"tolkien-star-hope.jpg",quote:"There, peeping among the cloud-wrack, Sam saw a white star twinkle for a while.",attr:"The Return of the King"},{img:"tolkien-sword-reforged.jpg",quote:"Renewed shall be blade that was broken, the crownless again shall be king.",attr:"The Riddle of Strider"},{img:"tolkien-fellowship-road.jpg",quote:"Faithless is he that says farewell when the road darkens.",attr:"Gimli"}],w=x[Math.floor(Math.random()*x.length)],_=`${ji}/art/${w.img}`;await qi.emails.send({from:"Ithil-stone <noreply@ithilstone.gg>",to:f,subject:"Your key to the seeing-stone",html:`
             <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 480px; margin: 0 auto; background: #0a0f0a; color: #c8cfc8; border-radius: 12px; overflow: hidden;">
               <div style="position: relative; height: 120px; overflow: hidden;">
                 <img src="${_}" alt="" style="width: 100%; height: 120px; object-fit: cover; opacity: 0.15; filter: brightness(1.2);" />
@@ -434,62 +434,86 @@ CRITICAL FORMAT RULES:
 </html>`}return t.post("/api/admin/newsletter/generate",i,async(c,d)=>{try{let{type:u="daily",customTopic:f,newsLinks:h,spotlightCard:g,spotlightNotes:v}=c.body;if(console.log(`[newsletter/generate] type=${u}, customTopic=${!!f}, newsLinks=${h?h.length+" chars":"none"}, spotlightCard=${!!g}`),u!=="daily"&&u!=="weekly")return d.status(400).json({error:'Type must be "daily" or "weekly"'});let x=[],w=[];for(let U=0;U<3;U++)try{let Ge=await fetch("https://api.scryfall.com/cards/random?q=is:firstprinting+date%3E2026-01-01+-is:universesbeyond+game:paper");if(Ge.ok){let Ee=await Ge.json();x.push({source:"scryfall_random",card:{name:Ee.name,type_line:Ee.type_line,mana_cost:Ee.mana_cost,oracle_text:Ee.oracle_text,set_name:Ee.set_name,rarity:Ee.rarity}}),Ee.name&&!s.has(Ee.name.toLowerCase())&&w.push(Ee.name)}await new Promise(Ee=>setTimeout(Ee,120))}catch{}try{let U=await fetch("https://api.scryfall.com/cards/search?q=date%3E2026-03-01+is:firstprinting+-is:universesbeyond+-is:digital+game:paper&order=review&dir=desc");if(U.ok){let Ee=((await U.json()).data||[]).slice(0,5);for(let It of Ee)x.push({source:"scryfall_recent",card:{name:It.name,type_line:It.type_line,mana_cost:It.mana_cost,oracle_text:It.oracle_text,set_name:It.set_name,rarity:It.rarity}}),It.name&&!s.has(It.name.toLowerCase())&&w.push(It.name)}}catch{}let _="",C="";try{let U=await fetch("https://www.mtgtop8.com/topcards?f=ST&meession=15");U.ok&&(_=(await U.text()).slice(0,3e3))}catch{}try{let U=await fetch("https://www.mtgtop8.com/topcards?f=MO&meession=15");U.ok&&(C=(await U.text()).slice(0,3e3))}catch{}_&&x.push({source:"mtgtop8_standard",raw:_.slice(0,1500)}),C&&x.push({source:"mtgtop8_modern",raw:C.slice(0,1500)}),x.push({source:"mtgjson_standard_atomic",note:"Referenced but not fetched (too large). Available at https://mtgjson.com/api/v5/StandardAtomicCards.json"});let k=await E.select().from(he),T=await E.select().from(Tt),O=await E.select().from(be),q={};for(let U of k)q[U.format]=(q[U.format]||0)+1;let F=Object.entries(q).sort((U,Ge)=>Ge[1]-U[1]).slice(0,5).map(([U,Ge])=>`${U}: ${Ge}`),V=new Date(Date.now()-10080*60*1e3).toISOString(),K=k.filter(U=>U.createdAt>V),oe=O.filter(U=>U.createdAt>V),$={totalAnalyses:k.length,totalUsers:T.length,analysesThisWeek:K.length,transactionsThisWeek:oe.length,topFormats:F,mostPopularFormat:F[0]||"unknown"},W=[...new Set(w)],se={};for(let U=0;U<Math.min(W.length,8);U++){let Ge=await l(W[U]);Ge&&(se[Ge.name]=Ge.artCrop),await new Promise(Ee=>setTimeout(Ee,120))}let pt=null;if(g)try{let U=await l(g);U&&(se[U.name]=U.artCrop,pt=U)}catch{}let rr=[];if(h){let U=h.match(/https?:\/\/[^\s]+/g)||[];for(let Ge of U.slice(0,5))try{let Ee=await fetch(Ge,{headers:{"User-Agent":"Ithil-stone/1.0"}});if(Ee.ok){let Fp=(await Ee.text()).replace(/<script[^>]*>[\s\S]*?<\/script>/gi,"").replace(/<style[^>]*>[\s\S]*?<\/style>/gi,"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();rr.push(`[FROM: ${Ge}]
 ${Fp.slice(0,2e3)}`)}}catch{}}let qn=new Tv.default,Ua="prompt_voice",Di="prompt_daily_structure",l4="prompt_weekly_structure",p4=`You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
 
-Your editorial voice: You're a grizzled old-school tournament player who's been slinging cards since Revised in 1994. You've seen every broken meta, every emergency ban, every "this will ruin Magic forever" panic \u2014 and you're still here shuffling up. You LOVE classic Magic \u2014 the art, the lore, the tight gameplay from Urza's block, Invasion, Onslaught, original Ravnica. The game was at its best when flavor and mechanics were built from Magic's own world.
+Your writing style is a crossover between Dave Barry and Terry Pratchett.
 
-OPINIONS (important \u2014 these define your personality):
-- Modern card design is pushed and overpowered. Too much value stapled onto cards for free. But you grudgingly respect the ones that earn it through clever design.
-- Universes Beyond / crossover sets (TMNT, Marvel, Doctor Who, LOTR exception noted below, etc.) are NOT real Magic to you. You think they cheapen the game. Don't write enthusiastically about crossover cards \u2014 if they come up in the data, acknowledge them briefly with mild disdain or a dry joke, then move on to actual Magic content. Never make a crossover card the centerpiece of a section unless specifically told to.
+From Dave Barry, you take:
+- Short, punchy paragraphs \u2014 rarely more than 3 sentences
+- Absurd comparisons and hyperbole played completely straight ("This is roughly equivalent to invading Russia in winter, except stupider")
+- Parenthetical asides that are funnier than the main sentence
+- A conversational, columnist tone \u2014 like you're telling a story at a bar
+- The phrase "I am not making this up" energy, even if you don't say it
+- Mock-serious authority over things that do not matter
+
+From Terry Pratchett, you take:
+- Dry, understated wit \u2014 the joke lands three words after the reader expects it
+- Footnotes* or bracketed asides that contain their own mini-jokes
+- Affectionate mockery of fantasy tropes, archetypes, and the people who love them
+- Players described like fantasy novel NPCs with absurd motivations
+- The understanding that humans (and goblins) are fundamentally ridiculous and lovable
+
+VOICE RULES:
+- Never talk down to the reader. They're in on the joke.
+- Explain MTG mechanics or meta only when it's funny to do so, and keep it brief.
+- Treat each game recap like a dramatic historical event being retold by an unreliable narrator.
+- Sprinkle in fake "wisdom" like it's flavor text on a card.
+- Keep paragraphs short. White space is your friend.
+- Aim for a reading level that a clever 8th grader would enjoy but a 40-year-old would laugh harder at.
+
+YOUR PERSONALITY:
+- You're a grizzled old-school tournament player who's been slinging cards since Revised in 1994. You LOVE classic Magic \u2014 Urza's block, Invasion, Onslaught, original Ravnica. The game was at its best when flavor and mechanics came from Magic's own world.
+- Modern card design is pushed and overpowered. Too much value stapled onto cards for free. But you grudgingly respect the ones that earn it.
+- Universes Beyond / crossover sets (TMNT, Marvel, Doctor Who, etc.) are NOT real Magic to you. They cheapen the game. If crossover cards come up, acknowledge them with mild disdain or a dry joke, then move on. Never make a crossover card the centerpiece unless specifically told to.
 - The ONE crossover exception: Lord of the Rings. You respect the Tolkien connection because the Ithil-stone itself is LOTR-themed. That's different. That's culture.
-- You miss when creature types were things like "Ernham Djinn" not "Mutant Ninja Turtle."
+- Layer in subtle LOTR references \u2014 you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.
 
-TONE & ACCESSIBILITY (CRITICAL):
-- Write for EVERYONE \u2014 seasoned pros and people who started last month. If you reference a mechanic or strategy, give a quick plain-English aside so newcomers get it too (e.g. "Living End \u2014 a combo deck that dumps creatures in the graveyard then brings them all back at once like a zombie flash mob")
-- Keep it HIGH-LEVEL and interesting. Talk about what's winning, what's funny, what's surprising. Do NOT go deep into specific tactical lines, sideboard plans, or matchup percentages. No one wants a textbook.
-- BE FUNNY. Dry humor, self-deprecating jabs, absurd analogies, hot takes you half-believe. Comedy makes people actually read newsletters. Think "funny friend who plays Magic" not "Magic professor."
-- Keep paragraphs SHORT. 2-3 sentences max. White space is your friend.
-- Layer in subtle LOTR references \u2014 you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.`,d4=`Write a daily newsletter in Axios-style format. Short, punchy, scannable. Under 1,000 words.
-
-STRUCTURE (use these exact section headers with numbered format):
-1. 1 big thing: [compelling headline]
-   - Bold opening sentence
-   - "Why it matters:" bullet
-   - "By the numbers:" or "Yes, but:" if relevant
-
-2. Meta pulse
-   - 2-3 short bullet-point takes on competitive play
-   - Bold the card names (but NOT land cards)
-
-3. The spoon: [catchy one-liner headline]
-   - One interesting/weird/fun thing from the MTG world
-
-4. From the Stone
-   - One-liner platform stat teaser linking back to ithilstone.gg
-   - e.g. "247 Commander decks analyzed this week. Most common mistake? [insight]"`,f4=`Write a weekly newsletter called "The Palant\xEDr Report". This is the week's roundup \u2014 entertaining, opinionated, accessible. Roughly 1,500-2,000 words. Remember: funny > thorough. Every section should have at least one line that makes someone smirk.
+*Footnotes are encouraged but not required. When used, they should contain observations that the main text was too dignified to include.`,d4=`Write a daily newsletter. Under 1,000 words.
 
 STRUCTURE:
-## Tournament Recap
-- Who won what this week, in plain English
-- Bold the deck names and key cards. Explain archetypes briefly for newcomers.
-- Hot takes welcome. "Mono-Green Landfall won again because apparently turning sideways is still a valid strategy."
+## [A ridiculous headline]
+- A brief "state of the gathering" intro (2\u20133 sentences, sets the scene like a nature documentary narrator discovering Magic players in their natural habitat)
 
-## What's Hot, What's Not
-- Quick hits on what's rising and falling across formats
-- Keep it snappy \u2014 one-liners with a bold card name and a take
+## The Dispatches
+- Game recaps and meta news written like war correspondence or nature documentaries
+- Treat each result like a dramatic historical event retold by an unreliable narrator
+- Bold card names. Explain mechanics only when it's funny to do so.
+- Parenthetical asides are your secret weapon
 
-## Card Watch
-- 3-4 cards moving in price or relevance
-- Why should I care? One sentence each. Don't write an essay.
+## Card of the Day
+- Spotlight one interesting card with an absurd hot take
+- Bold the card name
+- This should read like a Terry Pratchett footnote expanded into a paragraph
 
-## Spice Corner
-- One fun combo, weird deck, or "wait that works?" moment
-- Explain it so a newer player goes "oh that's cool"
+## From the Stone
+- One-liner platform stat teaser linking back to ithilstone.gg
+- A closing line that's either a fake proverb or a cliffhanger
+- e.g. "As the old planeswalkers say: never keep a one-land hand and never trust a blue mage who smiles."`,f4=`Write a weekly newsletter called "The Palant\xEDr Report". 1,500-2,000 words.
 
-## The Forge Report
-- Platform stats from ithilstone.gg \u2014 what are people analyzing?
-- Make it interesting: "42% of decks this week were Commander. The other 58% are lying."
+STRUCTURE:
+## [A ridiculous headline that sounds like a fantasy novel chapter title]
+- A brief "state of the gathering" intro (2\u20133 sentences). Set the scene. You are an unreliable narrator chronicling the week in competitive cardboard.
 
-## Weird Stuff We Found
-- 2-3 odd, funny, or notable things from the MTG world this week`,m4=await N.getSetting(Ua)||p4,h4=u==="daily"?await N.getSetting(Di)||d4:await N.getSetting(l4)||f4,g4=`FORMAT RULES:
+## The Week's Campaigns
+- Tournament recaps written like war correspondence from the front lines
+- Bold deck names and key cards. Each result is a dramatic historical event.
+- Parenthetical asides. Absurd comparisons played straight.
+- "Dimir Excruciator won the Challenge, which is roughly equivalent to a librarian winning a bar fight \u2014 quiet, methodical, and deeply unsettling to witness."
+
+## The Price of Power
+- Cards moving in price or relevance. 3-4 max.
+- Each gets an absurd hot take, not a market analysis.
+- "Formidable Speaker went from bulk to $8, which in MTG finance terms is the equivalent of finding out your weird cousin is actually a duke."
+
+## Card of the Week
+- One card spotlight with a Terry Pratchett\u2013style mini-essay
+- Bold the card name. This is the section where you really let the prose breathe.
+- Should read like flavor text that gained sentience and started a blog.
+
+## Dispatches from the Stone
+- Platform stats from ithilstone.gg woven into the narrative
+- A closing fake proverb or cliffhanger
+- "As the old planeswalkers say: the best sideboard card is the one your opponent forgot existed."
+
+*Footnotes encouraged throughout. They should contain observations the main text was too dignified to include.`,m4=await N.getSetting(Ua)||p4,h4=u==="daily"?await N.getSetting(Di)||d4:await N.getSetting(l4)||f4,g4=`FORMAT RULES:
 - Bold card names like **Lightning Bolt** (but never land cards like Plains, Island, etc.)
 - Keep it conversational and opinionated
 ${u==="daily"?'- Every section should make the reader think "I should check my deck"':"- Deep analysis, not surface-level recaps"}
