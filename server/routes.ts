@@ -1672,13 +1672,15 @@ export async function registerRoutes(
       // Headers
       .replace(/^## (.+)$/gm, '<h2 style="color:#4ade80; font-variant:small-caps; letter-spacing:1px; font-size:18px; margin:28px 0 12px; border-bottom:1px solid rgba(74,222,128,0.15); padding-bottom:6px;">$1</h2>')
       .replace(/^### (.+)$/gm, '<h3 style="color:#e2e8e2; font-size:15px; margin:20px 0 8px;">$1</h3>')
-      // Bold text
-      .replace(/\*\*(.+?)\*\*/g, (_, cardName) => {
-        const imgUrl = cardImageMap[cardName];
+      // Bold text — preserve all **text** as <strong>, check card image map with cleaned name
+      .replace(/\*\*(.+?)\*\*/g, (_, text) => {
+        // Strip trailing punctuation for card image lookup, but preserve original text
+        const cleanName = text.replace(/[:\.,;!?]+$/, '').trim();
+        const imgUrl = cardImageMap[cleanName] || cardImageMap[text];
         if (imgUrl) {
-          return `<strong style="color:#e2e8e2;">${cardName}</strong><br/><img src="${imgUrl}" alt="${cardName}" width="200" style="border-radius:8px; border:1px solid rgba(74,222,128,0.3); margin:8px 0; display:block;" />`;
+          return `<strong style="color:#e2e8e2;">${text}</strong><br/><img src="${imgUrl}" alt="${cleanName}" width="200" style="border-radius:8px; border:1px solid rgba(74,222,128,0.3); margin:8px 0; display:block;" />`;
         }
-        return `<strong style="color:#e2e8e2;">${cardName}</strong>`;
+        return `<strong style="color:#e2e8e2;">${text}</strong>`;
       })
       // Bullet points
       .replace(/^- (.+)$/gm, '<div style="padding-left:16px; margin:4px 0;"><span style="color:#4ade80; margin-right:6px;">•</span>$1</div>')
