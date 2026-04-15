@@ -826,8 +826,22 @@ export async function registerRoutes(
 
       // Find or create user
       let user = await storage.getUserByEmail(link.email);
+      const isNewUser = !user;
       if (!user) {
         user = await storage.createUser(randomUUID(), link.email);
+      }
+
+      // Auto-subscribe new users to the newsletter
+      if (isNewUser) {
+        try {
+          const existing = await storage.getSubscriberByEmail(link.email);
+          if (!existing) {
+            await storage.addSubscriber(link.email, "signup");
+          }
+        } catch (e) {
+          // Non-critical — don't block auth if subscribe fails
+          console.error("Auto-subscribe failed:", e);
+        }
       }
 
       // Create auth session (DB-persisted — survives redeploys)
