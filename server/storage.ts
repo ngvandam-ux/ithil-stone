@@ -16,6 +16,7 @@ import {
   type InsertPageVisit,
   type Subscriber,
   type Setting,
+  type NewsletterTask,
   analyses,
   credits,
   transactions,
@@ -28,6 +29,7 @@ import {
   subscribers,
   pageVisits,
   settings,
+  newsletterTasks,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -143,6 +145,19 @@ export async function initializeDatabase() {
       value TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS newsletter_tasks (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL,
+      custom_topic TEXT,
+      news_links TEXT,
+      spotlight_card TEXT,
+      spotlight_notes TEXT,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      source TEXT,
+      created_at TEXT NOT NULL,
+      used_at TEXT
+    );
   `);
 }
 
@@ -208,6 +223,12 @@ export interface IStorage {
   getSetting(key: string): Promise<string | null>;
   setSetting(key: string, value: string): Promise<void>;
   getAllSettings(): Promise<Setting[]>;
+
+  // Newsletter tasks
+  createNewsletterTask(data: Omit<NewsletterTask, "id">): Promise<NewsletterTask>;
+  getNewsletterTasks(status?: string): Promise<NewsletterTask[]>;
+  updateNewsletterTaskStatus(id: number, status: string): Promise<void>;
+  deleteNewsletterTask(id: number): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -645,6 +666,29 @@ export class DatabaseStorage implements IStorage {
 
   async getAllSettings(): Promise<Setting[]> {
     return await db.select().from(settings);
+  }
+
+  // ── Newsletter Tasks ────────────────────────────────────
+  async createNewsletterTask(data: Omit<NewsletterTask, "id">): Promise<NewsletterTask> {
+    const [task] = await db.insert(newsletterTasks).values(data).returning();
+    return task;
+  }
+
+  async getNewsletterTasks(status?: string): Promise<NewsletterTask[]> {
+    if (status) {
+      return await db.select().from(newsletterTasks).where(eq(newsletterTasks.status, status)).orderBy(desc(newsletterTasks.createdAt));
+    }
+    return await db.select().from(newsletterTasks).orderBy(desc(newsletterTasks.createdAt));
+  }
+
+  async updateNewsletterTaskStatus(id: number, status: string): Promise<void> {
+    await db.update(newsletterTasks)
+      .set({ status, usedAt: status === "used" ? new Date().toISOString() : null })
+      .where(eq(newsletterTasks.id, id));
+  }
+
+  async deleteNewsletterTask(id: number): Promise<void> {
+    await db.delete(newsletterTasks).where(eq(newsletterTasks.id, id));
   }
 }
 

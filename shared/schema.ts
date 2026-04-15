@@ -184,3 +184,20 @@ export const settings = pgTable("settings", {
 });
 
 export type Setting = typeof settings.$inferSelect;
+
+// ── Newsletter tasks (queued from Perplexity or anywhere) ────────────
+export const newsletterTasks = pgTable("newsletter_tasks", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(), // "daily" | "weekly"
+  customTopic: text("custom_topic"),
+  newsLinks: text("news_links"),
+  spotlightCard: text("spotlight_card"),
+  spotlightNotes: text("spotlight_notes"),
+  notes: text("notes"), // freeform notes/instructions
+  status: text("status").notNull(), // "pending" | "used" | "cancelled"
+  source: text("source"), // "perplexity" | "manual" | etc.
+  createdAt: text("created_at").notNull(),
+  usedAt: text("used_at"),
+});
+
+export type NewsletterTask = typeof newsletterTasks.$inferSelect;

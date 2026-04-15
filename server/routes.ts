@@ -2202,6 +2202,60 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
     }
   });
 
+  // ── Newsletter Tasks (queue from Perplexity or anywhere) ─────────
+
+  app.get("/api/admin/newsletter/tasks", requireAdmin, async (req, res) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const tasks = await storage.getNewsletterTasks(status);
+      res.json(tasks);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch tasks" });
+    }
+  });
+
+  app.post("/api/admin/newsletter/tasks", requireAdmin, async (req, res) => {
+    try {
+      const { type = "daily", customTopic, newsLinks, spotlightCard, spotlightNotes, notes, source = "manual" } = req.body;
+      const task = await storage.createNewsletterTask({
+        type,
+        customTopic: customTopic || null,
+        newsLinks: newsLinks || null,
+        spotlightCard: spotlightCard || null,
+        spotlightNotes: spotlightNotes || null,
+        notes: notes || null,
+        status: "pending",
+        source,
+        createdAt: new Date().toISOString(),
+        usedAt: null,
+      });
+      res.json(task);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to create task" });
+    }
+  });
+
+  app.put("/api/admin/newsletter/tasks/:id/status", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { status } = req.body as { status: string };
+      await storage.updateNewsletterTaskStatus(id, status);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to update task" });
+    }
+  });
+
+  app.delete("/api/admin/newsletter/tasks/:id", requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await storage.deleteNewsletterTask(id);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to delete task" });
+    }
+  });
+
   // ── Settings (editable prompts) ───────────────────────────
 
   app.get("/api/admin/settings", requireAdmin, async (_req, res) => {
