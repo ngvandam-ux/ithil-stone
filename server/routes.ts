@@ -1292,6 +1292,47 @@ export async function registerRoutes(
     }
   });
 
+  // ── Public: Newsletter archive (sent newsletters only) ────────────
+  app.get("/api/newsletters", async (_req, res) => {
+    try {
+      const all = await storage.getNewsletters();
+      // Only return sent newsletters, strip heavy HTML for list view
+      const sent = all
+        .filter((n) => n.status === "sent")
+        .map((n) => ({
+          id: n.id,
+          type: n.type,
+          subject: n.subject,
+          sentAt: n.sentAt,
+          createdAt: n.createdAt,
+        }));
+      res.json(sent);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch newsletters" });
+    }
+  });
+
+  app.get("/api/newsletters/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      if (isNaN(id)) return res.status(400).json({ error: "Invalid ID" });
+      const newsletter = await storage.getNewsletter(id);
+      if (!newsletter || newsletter.status !== "sent") {
+        return res.status(404).json({ error: "Newsletter not found" });
+      }
+      res.json({
+        id: newsletter.id,
+        type: newsletter.type,
+        subject: newsletter.subject,
+        htmlContent: newsletter.htmlContent,
+        sentAt: newsletter.sentAt,
+        createdAt: newsletter.createdAt,
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch newsletter" });
+    }
+  });
+
   // Admin: Dashboard stats
   app.get("/api/admin/stats", requireAdmin, async (_req, res) => {
     const totalUsers = db.select().from(usersTable).all().length;

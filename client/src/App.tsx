@@ -11,6 +11,7 @@ import Home from "@/pages/home";
 import Chronicle from "@/pages/chronicle";
 import Mint from "@/pages/mint";
 import AuthVerify from "@/pages/auth-verify";
+import Dispatches from "@/pages/dispatches";
 import AppNav from "@/components/app-nav";
 import { usePageTracker } from "@/components/page-tracker";
 
@@ -23,6 +24,8 @@ function AppRouter() {
         <Route path="/" component={Home} />
         <Route path="/chronicle" component={Chronicle} />
         <Route path="/mint" component={Mint} />
+        <Route path="/dispatches" component={Dispatches} />
+        <Route path="/dispatches/:id" component={Dispatches} />
         <Route path="/auth/verify/:token" component={AuthVerify} />
         <Route component={NotFound} />
       </Switch>

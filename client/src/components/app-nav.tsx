@@ -14,7 +14,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Coins, Sun, Moon, Eye, Scroll, Gem, User, LogOut, Mail, Loader2 } from "lucide-react";
+import { Coins, Sun, Moon, Eye, Scroll, Gem, User, LogOut, Mail, Loader2, Newspaper } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
 import { useAuth } from "@/lib/auth";
 
@@ -213,6 +213,17 @@ export default function AppNav() {
               >
                 <Scroll className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Chronicle</span>
+              </Button>
+            </Link>
+            <Link href="/dispatches">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`text-xs gap-1.5 ${isActive("/dispatches") ? "text-primary bg-primary/8" : "text-muted-foreground"}`}
+                data-testid="nav-dispatches"
+              >
+                <Newspaper className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Dispatches</span>
               </Button>
             </Link>
             <Link href="/mint">
