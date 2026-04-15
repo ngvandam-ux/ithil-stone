@@ -1648,9 +1648,11 @@ export async function registerRoutes(
       );
       if (!res.ok) return null;
       const data = await res.json();
-      const artCrop = data.image_uris?.art_crop || data.card_faces?.[0]?.image_uris?.art_crop;
-      if (!artCrop) return null;
-      return { name: data.name, artCrop };
+      // Use full card image (normal) so readers see mana cost, description, etc.
+      const cardImg = data.image_uris?.normal || data.card_faces?.[0]?.image_uris?.normal
+        || data.image_uris?.art_crop || data.card_faces?.[0]?.image_uris?.art_crop;
+      if (!cardImg) return null;
+      return { name: data.name, artCrop: cardImg };
     } catch {
       return null;
     }
@@ -1866,9 +1868,14 @@ export async function registerRoutes(
 
       const defaultVoice = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
 
-Your editorial voice: You're a grizzled old-school tournament Magic player who's been playing since Revised edition in 1994. You think modern card design is pushed and overpowered — too much crazy value stapled onto cards for free. You miss when Magic was about tight play decisions and smart deckbuilding, not who drew their busted mythic first. But you grudgingly respect when new cards earn it through clever design. You speak like a wise war counselor who's fought every meta since the game began.
+Your editorial voice: You're a grizzled old-school tournament player who's been slinging cards since Revised in 1994. You've seen every broken meta, every emergency ban, every "this will ruin Magic forever" panic — and you're still here shuffling up. Modern card design? Pushed. Overpowered. Too much value stapled onto cards for free. But you grudgingly respect the ones that earn it.
 
-Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.`;
+TONE & ACCESSIBILITY (CRITICAL):
+- Write for EVERYONE — seasoned pros and people who started last month. If you reference a mechanic or strategy, give a quick plain-English aside so newcomers get it too (e.g. "Living End — a combo deck that dumps creatures in the graveyard then brings them all back at once like a zombie flash mob")
+- Keep it HIGH-LEVEL and interesting. Talk about what's winning, what's funny, what's surprising. Do NOT go deep into specific tactical lines, sideboard plans, or matchup percentages. No one wants a textbook.
+- BE FUNNY. Dry humor, self-deprecating jabs, absurd analogies, hot takes you half-believe. Comedy makes people actually read newsletters. Think "funny friend who plays Magic" not "Magic professor."
+- Keep paragraphs SHORT. 2-3 sentences max. White space is your friend.
+- Layer in subtle LOTR references — you're the wise counselor at the seeing-stone. Don't overdo it, just flavor.`;
 
       const defaultDailyStructure = `Write a daily newsletter in Axios-style format. Short, punchy, scannable. Under 1,000 words.
 
@@ -1889,31 +1896,32 @@ STRUCTURE (use these exact section headers with numbered format):
    - One-liner platform stat teaser linking back to ithilstone.gg
    - e.g. "247 Commander decks analyzed this week. Most common mistake? [insight]"`;
 
-      const defaultWeeklyStructure = `Write a weekly newsletter called "The Palantír Report". This is the deep-dive strategic briefing. Roughly 2,000-2,500 words.
+      const defaultWeeklyStructure = `Write a weekly newsletter called "The Palantír Report". This is the week's roundup — entertaining, opinionated, accessible. Roughly 1,500-2,000 words. Remember: funny > thorough. Every section should have at least one line that makes someone smirk.
 
 STRUCTURE:
 ## Tournament Recap
-- Summary of notable competitive results this week
-- Bold winning deck archetypes and key cards
+- Who won what this week, in plain English
+- Bold the deck names and key cards. Explain archetypes briefly for newcomers.
+- Hot takes welcome. "Mono-Green Landfall won again because apparently turning sideways is still a valid strategy."
 
-## Format Deep-Dive
-- Pick one format and go deep on its current state
-- What's rising, what's falling, what's being slept on
+## What's Hot, What's Not
+- Quick hits on what's rising and falling across formats
+- Keep it snappy — one-liners with a bold card name and a take
 
 ## Card Watch
-- 3-4 cards that are moving (up or down) in relevance
-- Brief take on each with reasoning
+- 3-4 cards moving in price or relevance
+- Why should I care? One sentence each. Don't write an essay.
 
-## Combo of the Week
-- One spicy or underexplored combo
-- Cards involved, how it works, where to play it
+## Spice Corner
+- One fun combo, weird deck, or "wait that works?" moment
+- Explain it so a newer player goes "oh that's cool"
 
 ## The Forge Report
-- Platform stats and insights from ithilstone.gg analyses
-- What are users building? What formats dominate?
+- Platform stats from ithilstone.gg — what are people analyzing?
+- Make it interesting: "42% of decks this week were Commander. The other 58% are lying."
 
-## Interesting Finds
-- 2-3 weird, cool, or notable things from the MTG world this week`;
+## Weird Stuff We Found
+- 2-3 odd, funny, or notable things from the MTG world this week`;
 
       const voice = (await storage.getSetting(voiceKey)) || defaultVoice;
       const structure = type === "daily"
