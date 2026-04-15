@@ -713,6 +713,11 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // ── Version check endpoint ──────────────────────────────────────
+  app.get("/api/version", (_req, res) => {
+    res.json({ version: "cb3686e7", deployed: new Date().toISOString() });
+  });
+
   // ── Middleware: session ID + auth resolution ────────────────────
   app.use((req, _res, next) => {
     if (!req.headers["x-session-id"]) {
