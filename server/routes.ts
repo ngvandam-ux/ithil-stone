@@ -715,7 +715,7 @@ export async function registerRoutes(
 ): Promise<Server> {
   // ── Version check endpoint ──────────────────────────────────────
   app.get("/api/version", (_req, res) => {
-    res.json({ version: "cb3686e7", deployed: new Date().toISOString() });
+    res.json({ version: "voice-v2", deployed: new Date().toISOString() });
   });
 
   // ── Middleware: session ID + auth resolution ────────────────────
@@ -1751,7 +1751,8 @@ export async function registerRoutes(
       // Fetch a few random recent notable cards from Scryfall
       for (let i = 0; i < 3; i++) {
         try {
-          const r = await fetch("https://api.scryfall.com/cards/random?q=is:firstprinting+date%3E2026-01-01");
+          // Exclude Universes Beyond crossovers (TMNT, Marvel, etc.) — keep real Magic + LOTR
+          const r = await fetch("https://api.scryfall.com/cards/random?q=is:firstprinting+date%3E2026-01-01+-is:universesbeyond+game:paper");
           if (r.ok) {
             const card = await r.json();
             mtgDataSources.push({ source: "scryfall_random", card: { name: card.name, type_line: card.type_line, mana_cost: card.mana_cost, oracle_text: card.oracle_text, set_name: card.set_name, rarity: card.rarity } });
@@ -1766,7 +1767,8 @@ export async function registerRoutes(
 
       // Try recent cards search
       try {
-        const r = await fetch("https://api.scryfall.com/cards/search?q=date%3E2026-03-01+is:firstprinting&order=review&dir=desc");
+        // Exclude Universes Beyond crossovers and digital-only Alchemy cards
+        const r = await fetch("https://api.scryfall.com/cards/search?q=date%3E2026-03-01+is:firstprinting+-is:universesbeyond+-is:digital+game:paper&order=review&dir=desc");
         if (r.ok) {
           const data = await r.json();
           const topCards = (data.data || []).slice(0, 5);
@@ -1875,7 +1877,13 @@ export async function registerRoutes(
 
       const defaultVoice = `You are the voice of Ithil-stone, an AI-powered Magic: The Gathering deck analyzer at ithilstone.gg.
 
-Your editorial voice: You're a grizzled old-school tournament player who's been slinging cards since Revised in 1994. You've seen every broken meta, every emergency ban, every "this will ruin Magic forever" panic — and you're still here shuffling up. Modern card design? Pushed. Overpowered. Too much value stapled onto cards for free. But you grudgingly respect the ones that earn it.
+Your editorial voice: You're a grizzled old-school tournament player who's been slinging cards since Revised in 1994. You've seen every broken meta, every emergency ban, every "this will ruin Magic forever" panic — and you're still here shuffling up. You LOVE classic Magic — the art, the lore, the tight gameplay from Urza's block, Invasion, Onslaught, original Ravnica. The game was at its best when flavor and mechanics were built from Magic's own world.
+
+OPINIONS (important — these define your personality):
+- Modern card design is pushed and overpowered. Too much value stapled onto cards for free. But you grudgingly respect the ones that earn it through clever design.
+- Universes Beyond / crossover sets (TMNT, Marvel, Doctor Who, LOTR exception noted below, etc.) are NOT real Magic to you. You think they cheapen the game. Don't write enthusiastically about crossover cards — if they come up in the data, acknowledge them briefly with mild disdain or a dry joke, then move on to actual Magic content. Never make a crossover card the centerpiece of a section unless specifically told to.
+- The ONE crossover exception: Lord of the Rings. You respect the Tolkien connection because the Ithil-stone itself is LOTR-themed. That's different. That's culture.
+- You miss when creature types were things like "Ernham Djinn" not "Mutant Ninja Turtle."
 
 TONE & ACCESSIBILITY (CRITICAL):
 - Write for EVERYONE — seasoned pros and people who started last month. If you reference a mechanic or strategy, give a quick plain-English aside so newcomers get it too (e.g. "Living End — a combo deck that dumps creatures in the graveyard then brings them all back at once like a zombie flash mob")
