@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
+import SubscribeForm from "@/components/subscribe-form";
 import { Badge } from "@/components/ui/badge";
 import {
   Tooltip,
@@ -578,7 +579,12 @@ export default function Home() {
           />
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/90 to-background/70" />
         </div>
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center space-y-2">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 text-center space-y-3">
+          {/* Newsletter subscribe */}
+          <div className="pb-3 border-b border-border/20">
+            <p className="text-[11px] text-muted-foreground/70 mb-2">Get strategic dispatches from the Stone</p>
+            <SubscribeForm source="footer" />
+          </div>
           <p className="text-xs text-muted-foreground">
             <span className="font-display">Ithil-stone</span> — AI-Powered Magic: The Gathering Deck Analyzer
           </p>

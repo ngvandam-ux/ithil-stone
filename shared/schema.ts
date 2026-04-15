@@ -147,6 +147,18 @@ export const insertNewsletterSchema = createInsertSchema(newsletters).omit({
 export type InsertNewsletter = z.infer<typeof insertNewsletterSchema>;
 export type Newsletter = typeof newsletters.$inferSelect;
 
+// ── Newsletter subscribers table ─────────────────────────────────────
+export const subscribers = pgTable("subscribers", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  status: text("status").notNull().default("active"), // active, unsubscribed
+  source: text("source"), // "website", "dispatches", "footer", "admin"
+  createdAt: text("created_at").notNull(),
+  unsubscribedAt: text("unsubscribed_at"),
+});
+
+export type Subscriber = typeof subscribers.$inferSelect;
+
 // ── Page visits table (traffic tracking) ─────────────────────────────
 export const pageVisits = pgTable("page_visits", {
   id: serial("id").primaryKey(),

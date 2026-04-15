@@ -14,6 +14,7 @@ import {
   type InsertNewsletter,
   type PageVisit,
   type InsertPageVisit,
+  type Subscriber,
   analyses,
   credits,
   transactions,
@@ -23,6 +24,7 @@ import {
   promoCodes,
   promoRedemptions,
   newsletters,
+  subscribers,
   pageVisits,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -119,6 +121,14 @@ export async function initializeDatabase() {
       expires_at TEXT,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS subscribers (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'active',
+      source TEXT,
+      created_at TEXT NOT NULL,
+      unsubscribed_at TEXT
+    );
     CREATE TABLE IF NOT EXISTS promo_redemptions (
       id SERIAL PRIMARY KEY,
       promo_code_id INTEGER NOT NULL,
@@ -175,6 +185,13 @@ export interface IStorage {
   getNewsletter(id: number): Promise<Newsletter | undefined>;
   updateNewsletter(id: number, data: Partial<InsertNewsletter>): Promise<Newsletter | undefined>;
   deleteNewsletter(id: number): Promise<void>;
+
+  // Subscribers
+  addSubscriber(email: string, source?: string): Promise<Subscriber>;
+  removeSubscriber(email: string): Promise<void>;
+  getActiveSubscribers(): Promise<Subscriber[]>;
+  getAllSubscribers(): Promise<Subscriber[]>;
+  getSubscriberByEmail(email: string): Promise<Subscriber | undefined>;
 
   // Page visits
   recordPageVisit(data: InsertPageVisit): Promise<PageVisit>;
@@ -555,6 +572,48 @@ export class DatabaseStorage implements IStorage {
 
   async getPageVisits(): Promise<PageVisit[]> {
     return await db.select().from(pageVisits);
+  }
+
+  // ── Subscribers ──────────────────────────────────────────
+  async addSubscriber(email: string, source?: string): Promise<Subscriber> {
+    // Upsert: if email exists but was unsubscribed, reactivate
+    const existing = await db.select().from(subscribers).where(eq(subscribers.email, email));
+    if (existing[0]) {
+      if (existing[0].status === "unsubscribed") {
+        await db.update(subscribers)
+          .set({ status: "active", unsubscribedAt: null, source: source || existing[0].source })
+          .where(eq(subscribers.email, email));
+        const [updated] = await db.select().from(subscribers).where(eq(subscribers.email, email));
+        return updated;
+      }
+      return existing[0]; // already active
+    }
+    const [sub] = await db.insert(subscribers).values({
+      email,
+      status: "active",
+      source: source || "website",
+      createdAt: new Date().toISOString(),
+    }).returning();
+    return sub;
+  }
+
+  async removeSubscriber(email: string): Promise<void> {
+    await db.update(subscribers)
+      .set({ status: "unsubscribed", unsubscribedAt: new Date().toISOString() })
+      .where(eq(subscribers.email, email));
+  }
+
+  async getActiveSubscribers(): Promise<Subscriber[]> {
+    return await db.select().from(subscribers).where(eq(subscribers.status, "active"));
+  }
+
+  async getAllSubscribers(): Promise<Subscriber[]> {
+    return await db.select().from(subscribers).orderBy(desc(subscribers.createdAt));
+  }
+
+  async getSubscriberByEmail(email: string): Promise<Subscriber | undefined> {
+    const [sub] = await db.select().from(subscribers).where(eq(subscribers.email, email));
+    return sub;
   }
 }
 

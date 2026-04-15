@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage";
-import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable, pageVisits as pageVisitsTable } from "@shared/schema";
+import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable, pageVisits as pageVisitsTable, subscribers as subscribersTable } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -1292,6 +1292,52 @@ export async function registerRoutes(
     }
   });
 
+  // ── Public: Newsletter subscribe / unsubscribe ──────────────────
+  app.post("/api/subscribe", async (req, res) => {
+    try {
+      const { email, source } = req.body;
+      if (!email || typeof email !== "string" || !email.includes("@")) {
+        return res.status(400).json({ error: "Valid email is required" });
+      }
+      const subscriber = await storage.addSubscriber(email.toLowerCase().trim(), source || "website");
+      res.json({ success: true, status: subscriber.status });
+    } catch (err: any) {
+      console.error("Subscribe error:", err);
+      res.status(500).json({ error: "Failed to subscribe" });
+    }
+  });
+
+  app.post("/api/unsubscribe", async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      await storage.removeSubscriber(email.toLowerCase().trim());
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to unsubscribe" });
+    }
+  });
+
+  // GET /api/unsubscribe?email=... (for one-click unsubscribe from email links)
+  app.get("/api/unsubscribe", async (req, res) => {
+    try {
+      const email = req.query.email as string;
+      if (email) {
+        await storage.removeSubscriber(email.toLowerCase().trim());
+      }
+      res.send(`<html><body style="font-family:Georgia,serif;text-align:center;padding:60px;background:#0a0f0a;color:#c8cfc8;">
+        <h2 style="color:#4ade80;">Unsubscribed</h2>
+        <p>You have been removed from the Ithil-stone dispatches.</p>
+        <p style="color:#4a5a4a;font-size:14px;margin-top:20px;"><em>"The road goes ever on and on..."</em></p>
+        <a href="https://ithilstone.gg" style="color:#4ade80;">Return to Ithil-stone</a>
+      </body></html>`);
+    } catch {
+      res.status(500).send("Error processing unsubscribe");
+    }
+  });
+
   // ── Public: Newsletter archive (sent newsletters only) ────────────
   app.get("/api/newsletters", async (_req, res) => {
     try {
@@ -1941,12 +1987,12 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
         return res.status(500).json({ error: "Resend email client not configured (missing RESEND_API_KEY)" });
       }
 
-      // Get all users with email addresses
-      const allUsers = await db.select().from(usersTable);
-      const emails = allUsers.map(u => u.email).filter(Boolean);
+      // Get all active subscribers
+      const activeSubs = await storage.getActiveSubscribers();
+      const emails = activeSubs.map(s => s.email).filter(Boolean);
 
       if (emails.length === 0) {
-        return res.status(400).json({ error: "No users with email addresses found" });
+        return res.status(400).json({ error: "No active subscribers found. Add subscribers first." });
       }
 
       // Send via Resend batch API (max 100 per batch)
@@ -1954,11 +2000,14 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
       let sentCount = 0;
       for (let i = 0; i < emails.length; i += batchSize) {
         const batch = emails.slice(i, i + batchSize);
-        const emailPayloads = batch.map(email => ({
+        const emailPayloads = batch.map(recipientEmail => ({
           from: "Ithil-stone <noreply@ithilstone.gg>",
-          to: email,
+          to: recipientEmail,
           subject: newsletter.subject,
-          html: newsletter.htmlContent,
+          html: newsletter.htmlContent.replace(
+            /{{unsubscribe_url}}/g,
+            `https://ithilstone.gg/api/unsubscribe?email=${encodeURIComponent(recipientEmail)}`
+          ),
         }));
 
         try {
@@ -2048,6 +2097,36 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
     } catch (err: any) {
       console.error("Newsletter update error:", err);
       res.status(500).json({ error: "Failed to update newsletter" });
+    }
+  });
+
+  // ── Admin: Subscriber management ───────────────────────────
+  app.get("/api/admin/subscribers", requireAdmin, async (_req, res) => {
+    try {
+      const subs = await storage.getAllSubscribers();
+      res.json(subs);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch subscribers" });
+    }
+  });
+
+  app.post("/api/admin/subscribers", requireAdmin, async (req, res) => {
+    try {
+      const { email, source } = req.body;
+      if (!email || !email.includes("@")) return res.status(400).json({ error: "Valid email required" });
+      const sub = await storage.addSubscriber(email.toLowerCase().trim(), source || "admin");
+      res.json(sub);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to add subscriber" });
+    }
+  });
+
+  app.delete("/api/admin/subscribers/:email", requireAdmin, async (req, res) => {
+    try {
+      await storage.removeSubscriber(decodeURIComponent(req.params.email));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to remove subscriber" });
     }
   });
 

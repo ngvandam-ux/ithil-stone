@@ -12,6 +12,7 @@ import {
   Scroll,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
+import SubscribeForm from "@/components/subscribe-form";
 
 interface NewsletterSummary {
   id: number;
@@ -209,6 +210,12 @@ export default function Dispatches() {
           <p className="text-sm text-muted-foreground max-w-lg">
             Strategic intelligence from the Stone — meta analysis, tournament results, and counsel for the battlefield.
           </p>
+          {/* Subscribe CTA */}
+          <div className="mt-4 p-3 rounded-lg bg-primary/5 border border-primary/10">
+            <p className="text-xs text-muted-foreground mb-2">Receive dispatches directly — strategic intel delivered to your inbox.</p>
+            <SubscribeForm source="dispatches" compact />
+          </div>
+
           {/* LOTR quote */}
           <div className="mt-4 border-l-2 border-primary/20 pl-3">
             <p className="text-xs text-muted-foreground/70 italic"
