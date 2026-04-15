@@ -244,7 +244,18 @@ export class DatabaseStorage implements IStorage {
     // If userId provided, check for existing user credits first
     if (userId) {
       const userCredit = await this.getCreditsByUser(userId);
-      if (userCredit) return userCredit;
+      if (userCredit) {
+        // If user has a credit record but on a different session, update sessionId
+        // so deductCoin/addCoins work with the current session
+        if (userCredit.sessionId !== sessionId) {
+          db.update(credits)
+            .set({ sessionId })
+            .where(eq(credits.id, userCredit.id))
+            .run();
+          return { ...userCredit, sessionId };
+        }
+        return userCredit;
+      }
     }
     const existing = await this.getCredits(sessionId);
     if (existing) {
@@ -257,6 +268,24 @@ export class DatabaseStorage implements IStorage {
         return { ...existing, userId };
       }
       return existing;
+    }
+    // New credit record — but if logged in and user already has ANY credit row
+    // (even on an old session), DON'T give free rings again
+    if (userId) {
+      // Double-check: might have a row with a stale sessionId
+      const anyUserCredit = db
+        .select()
+        .from(credits)
+        .where(eq(credits.userId, userId))
+        .get();
+      if (anyUserCredit) {
+        // Point existing record to the current session
+        db.update(credits)
+          .set({ sessionId })
+          .where(eq(credits.id, anyUserCredit.id))
+          .run();
+        return { ...anyUserCredit, sessionId };
+      }
     }
     return db
       .insert(credits)
@@ -291,14 +320,50 @@ export class DatabaseStorage implements IStorage {
       .set({ userId })
       .where(and(eq(analyses.sessionId, sessionId), eq(analyses.userId, null as any)))
       .run();
-    db.update(credits)
-      .set({ userId })
-      .where(and(eq(credits.sessionId, sessionId), eq(credits.userId, null as any)))
-      .run();
     db.update(transactions)
       .set({ userId })
       .where(and(eq(transactions.sessionId, sessionId), eq(transactions.userId, null as any)))
       .run();
+
+    // Credits: consolidate into a single row per user
+    const existingUserCredit = db
+      .select()
+      .from(credits)
+      .where(eq(credits.userId, userId))
+      .get();
+    const sessionCredit = db
+      .select()
+      .from(credits)
+      .where(and(eq(credits.sessionId, sessionId), eq(credits.userId, null as any)))
+      .get();
+
+    if (existingUserCredit && sessionCredit) {
+      // User already had a credit row — absorb purchased rings from anonymous session
+      // but DON'T give them the free starter rings again.
+      // Only carry over coins above the initial 3 (purchased rings)
+      const purchasedRings = Math.max(0, sessionCredit.coins - 3);
+      if (purchasedRings > 0) {
+        db.update(credits)
+          .set({ coins: existingUserCredit.coins + purchasedRings, sessionId })
+          .where(eq(credits.id, existingUserCredit.id))
+          .run();
+      } else {
+        // Just update the sessionId so current session uses the existing balance
+        db.update(credits)
+          .set({ sessionId })
+          .where(eq(credits.id, existingUserCredit.id))
+          .run();
+      }
+      // Delete the orphaned anonymous credit row
+      db.delete(credits).where(eq(credits.id, sessionCredit.id)).run();
+    } else if (sessionCredit && !existingUserCredit) {
+      // First login — just link the anonymous session to the user
+      db.update(credits)
+        .set({ userId })
+        .where(eq(credits.id, sessionCredit.id))
+        .run();
+    }
+    // If existingUserCredit but no sessionCredit, nothing to do
   }
 
   // ── Auth Sessions (DB-persisted) ─────────────────────────────────────

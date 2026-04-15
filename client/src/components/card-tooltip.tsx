@@ -229,13 +229,19 @@ export default function CardTooltip({
   // Quick check if this is obviously not a card name
   const isLabel = isLikelyLabel(cleanName);
 
-  // Eagerly verify card on mount (not just on hover) so link styling shows immediately
+  // Eagerly verify card on mount so link styling shows immediately
   useEffect(() => {
-    if (isLabel || isCard === true) return;
-    // If it's a known deck card, mark it immediately
+    if (isLabel) return;
+    // If it's a known deck card, mark it and prefetch image
     if (knownCards?.has(key)) {
       setIsCard(true);
       setScryfallUrl(`https://scryfall.com/search?q=${encodeURIComponent(`!"${cleanName}"`)}`);  
+      // Also prefetch image data into cache
+      prefetchCard(cleanName).then(() => {
+        const data = cardCache.get(key);
+        if (data?.imageUrl) setImageUrl(data.imageUrl);
+        if (data?.scryfallUrl) setScryfallUrl(data.scryfallUrl);
+      });
       return;
     }
     // Check cache
@@ -257,13 +263,14 @@ export default function CardTooltip({
         if (data?.scryfallUrl) setScryfallUrl(data.scryfallUrl);
       }
     });
-  }, [cleanName, key, isLabel, isCard, knownCards]);
+  // Only run on mount / when card name changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cleanName, key]);
 
   const handleMouseEnter = useCallback(() => {
     if (isLabel) return;
     hoverStartRef.current = Date.now();
 
-    // Small delay to avoid flashing tooltips on quick mouse passes
     timeoutRef.current = setTimeout(async () => {
       // Calculate position
       if (triggerRef.current) {
@@ -278,7 +285,13 @@ export default function CardTooltip({
         });
       }
 
-      // Check cache first
+      // If we already have the image URL cached (from eager prefetch), show immediately
+      if (imageUrl) {
+        setShowTooltip(true);
+        return;
+      }
+
+      // Check cache
       const cached = cardCache.get(key);
       if (cached) {
         setIsCard(cached.exists);
@@ -290,7 +303,7 @@ export default function CardTooltip({
         return;
       }
 
-      // If it's a known deck card, we know it exists — show tooltip immediately with constructed URL
+      // If it's a known deck card, show tooltip immediately with constructed URL
       if (knownCards?.has(key)) {
         const imgUrl = `https://api.scryfall.com/cards/named?exact=${encodeURIComponent(cleanName)}&format=image&version=normal`;
         setIsCard(true);
@@ -299,12 +312,6 @@ export default function CardTooltip({
           `https://scryfall.com/search?q=${encodeURIComponent(`!"${cleanName}"`)}`
         );
         setShowTooltip(true);
-        // Still prefetch to get the proper URLs for cache
-        prefetchCard(cleanName).then(() => {
-          const data = cardCache.get(key);
-          if (data?.imageUrl) setImageUrl(data.imageUrl);
-          if (data?.scryfallUrl) setScryfallUrl(data.scryfallUrl);
-        });
         return;
       }
 
@@ -317,8 +324,8 @@ export default function CardTooltip({
         setScryfallUrl(data?.scryfallUrl || null);
         setShowTooltip(true);
       }
-    }, 150);
-  }, [cleanName, key, isLabel, knownCards]);
+    }, 120);
+  }, [cleanName, key, isLabel, knownCards, imageUrl]);
 
   const handleMouseLeave = useCallback(() => {
     if (timeoutRef.current) {
