@@ -1,0 +1,13 @@
+{
+  "name": "Ithil-stone — AI MTG Deck Analyzer",
+  "short_name": "Ithil-stone",
+  "description": "AI-powered Magic: The Gathering deck analysis. The seeing-stone reveals hidden combos, mana base fixes, and meta positioning.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f0a",
+  "theme_color": "#0a0f0a",
+  "icons": [
+    { "src": "/favicon.png", "sizes": "32x32", "type": "image/png" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}

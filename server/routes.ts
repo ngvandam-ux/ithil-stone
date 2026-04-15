@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage";
 import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable } from "@shared/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
@@ -1316,6 +1316,211 @@ export async function registerRoutes(
       totalRevenue: totalRevenue.toFixed(2),
       confirmedTransactions: confirmedTx.length,
     });
+  });
+
+  // ── Stripe Webhook (auto-verify payments) ────────────────────────
+  // Stripe sends checkout.session.completed when payment succeeds
+  // For Payment Links, we match by amount to determine which pack was purchased
+  const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET || "";
+
+  app.post("/api/webhooks/stripe", async (req, res) => {
+    try {
+      // For now, log the event. Full signature verification requires the stripe SDK.
+      // This endpoint is called by Stripe with the checkout session data.
+      const event = req.body;
+      console.log("[stripe-webhook] Received event:", event.type);
+
+      if (event.type === "checkout.session.completed") {
+        const session = event.data?.object;
+        const amountTotal = session?.amount_total; // in cents
+        const customerEmail = session?.customer_details?.email?.toLowerCase()?.trim();
+        const paymentIntent = session?.payment_intent;
+
+        if (!customerEmail || !amountTotal) {
+          console.log("[stripe-webhook] Missing email or amount, skipping");
+          return res.json({ received: true });
+        }
+
+        // Match amount to pack
+        let pack = null;
+        if (amountTotal === 199) pack = RING_PACKS.find(p => p.id === "pack-3");
+        else if (amountTotal === 499) pack = RING_PACKS.find(p => p.id === "pack-10");
+        else if (amountTotal === 1299) pack = RING_PACKS.find(p => p.id === "pack-30");
+
+        if (!pack) {
+          console.log(`[stripe-webhook] Unknown amount: ${amountTotal} cents`);
+          return res.json({ received: true });
+        }
+
+        // Check for duplicate processing
+        const existingTx = db.select().from(transactionsTable)
+          .where(eq(transactionsTable.txSignature, paymentIntent || `stripe_wh_${session.id}`))
+          .get();
+        if (existingTx) {
+          console.log(`[stripe-webhook] Already processed: ${paymentIntent}`);
+          return res.json({ received: true });
+        }
+
+        // Find user by email
+        const user = await storage.getUserByEmail(customerEmail);
+        if (user) {
+          // Get user's credit record
+          const credit = await storage.getCreditsByUser(user.id);
+          if (credit) {
+            // Credit rings directly
+            await storage.addCoins(credit.sessionId, pack.rings);
+            // Record transaction
+            await storage.createTransaction({
+              sessionId: credit.sessionId,
+              userId: user.id,
+              method: "stripe",
+              amount: pack.rings,
+              pricePaid: `$${pack.priceUsd}`,
+              txSignature: paymentIntent || `stripe_wh_${session.id}`,
+              status: "confirmed",
+              createdAt: new Date().toISOString(),
+            });
+            console.log(`[stripe-webhook] Credited ${pack.rings} rings to ${customerEmail}`);
+
+            // Send purchase receipt email
+            if (resend) {
+              try {
+                await resend.emails.send({
+                  from: "Ithil-stone <noreply@ithilstone.gg>",
+                  to: customerEmail,
+                  subject: `Your ${pack.label} has been forged`,
+                  html: `
+                    <div style="font-family: Georgia, 'Times New Roman', serif; max-width: 480px; margin: 0 auto; background: #0a0f0a; color: #c8cfc8; border-radius: 12px; overflow: hidden;">
+                      <div style="padding: 32px;">
+                        <h1 style="color: #4ade80; font-size: 20px; margin: 0 0 8px; font-variant: small-caps; letter-spacing: 1px;">The Forge Rings True</h1>
+                        <p style="color: #8a9a8a; font-size: 13px; margin: 0 0 24px;">Your Mithril Rings have been delivered.</p>
+                        <div style="background: rgba(74,222,128,0.08); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                          <div style="text-align: center;">
+                            <div style="font-size: 28px; font-weight: bold; color: #4ade80; margin-bottom: 4px;">${pack.rings}</div>
+                            <div style="font-size: 13px; color: #8a9a8a;">Mithril Rings</div>
+                            <div style="font-size: 12px; color: #5a6a5a; margin-top: 8px;">${pack.label} · $${pack.priceUsd} USD</div>
+                          </div>
+                        </div>
+                        <p style="font-size: 14px; line-height: 1.6;">Each ring grants one audience with the seeing-stone. Use them wisely, for not all counsel is freely given.</p>
+                        <a href="${APP_URL}" style="display: inline-block; margin: 20px 0; padding: 12px 28px; background: #166534; color: #fff; text-decoration: none; border-radius: 8px; font-size: 14px; font-weight: 600;">Consult the Stone</a>
+                        <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid rgba(74,222,128,0.1);">
+                          <p style="font-size: 11px; color: #3a4a3a; font-style: italic; margin: 0;">"Deep in the halls of Khazad-dûm, Mithril Rings are forged."</p>
+                        </div>
+                      </div>
+                    </div>
+                  `,
+                });
+              } catch (emailErr: any) {
+                console.warn("[stripe-webhook] Failed to send receipt email:", emailErr.message);
+              }
+            }
+          } else {
+            console.log(`[stripe-webhook] User ${customerEmail} has no credit record yet`);
+          }
+        } else {
+          console.log(`[stripe-webhook] No user found for ${customerEmail}, storing pending`);
+          // Store as pending transaction — will be credited when user signs up
+          await storage.createTransaction({
+            sessionId: `pending_${customerEmail}`,
+            userId: null,
+            method: "stripe",
+            amount: pack.rings,
+            pricePaid: `$${pack.priceUsd}`,
+            txSignature: paymentIntent || `stripe_wh_${session.id}`,
+            status: "pending_signup",
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error("[stripe-webhook] Error:", err);
+      res.status(500).json({ error: "Webhook processing failed" });
+    }
+  });
+
+  // ── Analytics endpoint ───────────────────────────────────────────
+  app.get("/api/admin/analytics", requireAdmin, async (_req, res) => {
+    try {
+      const allAnalyses = db.select().from(analysesTable).all();
+      const allTx = db.select().from(transactionsTable).all();
+      const allUsers = db.select().from(usersTable).all();
+      const allCredits = db.select().from(creditsTable).all();
+
+      // Format distribution
+      const formatCounts: Record<string, number> = {};
+      for (const a of allAnalyses) {
+        formatCounts[a.format] = (formatCounts[a.format] || 0) + 1;
+      }
+
+      // Daily analysis counts (last 30 days)
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const recentAnalyses = allAnalyses.filter(a => a.createdAt > thirtyDaysAgo);
+      const dailyAnalyses: Record<string, number> = {};
+      for (const a of recentAnalyses) {
+        const day = a.createdAt.split("T")[0];
+        dailyAnalyses[day] = (dailyAnalyses[day] || 0) + 1;
+      }
+
+      // Revenue by day (last 30 days)
+      const recentTx = allTx.filter(t => t.createdAt > thirtyDaysAgo && t.status === "confirmed");
+      const dailyRevenue: Record<string, number> = {};
+      for (const t of recentTx) {
+        const day = t.createdAt.split("T")[0];
+        const price = parseFloat(t.pricePaid.replace(/[^0-9.]/g, "")) || 0;
+        dailyRevenue[day] = (dailyRevenue[day] || 0) + price;
+      }
+
+      // Conversion funnel
+      const totalVisitors = allCredits.length; // everyone who got credits initialized
+      const totalAnalyzed = new Set(allAnalyses.map(a => a.userId || a.sessionId)).size;
+      const totalPaid = new Set(allTx.filter(t => t.status === "confirmed").map(t => t.userId || t.sessionId)).size;
+      const totalSignedUp = allUsers.length;
+
+      // Pack popularity
+      const packCounts: Record<string, { count: number; revenue: number }> = {};
+      for (const t of allTx.filter(tx => tx.status === "confirmed")) {
+        const price = parseFloat(t.pricePaid.replace(/[^0-9.]/g, "")) || 0;
+        const packKey = `${t.amount} rings`;
+        if (!packCounts[packKey]) packCounts[packKey] = { count: 0, revenue: 0 };
+        packCounts[packKey].count++;
+        packCounts[packKey].revenue += price;
+      }
+
+      // Average analyses per user
+      const userAnalysisCounts = new Map<string, number>();
+      for (const a of allAnalyses) {
+        const key = a.userId || a.sessionId;
+        userAnalysisCounts.set(key, (userAnalysisCounts.get(key) || 0) + 1);
+      }
+      const avgAnalysesPerUser = userAnalysisCounts.size > 0
+        ? (allAnalyses.length / userAnalysisCounts.size).toFixed(1)
+        : "0";
+
+      res.json({
+        funnel: {
+          visitors: totalVisitors,
+          analyzed: totalAnalyzed,
+          signedUp: totalSignedUp,
+          paid: totalPaid,
+          conversionRate: totalVisitors > 0 ? `${((totalPaid / totalVisitors) * 100).toFixed(1)}%` : "0%",
+        },
+        formatDistribution: formatCounts,
+        dailyAnalyses,
+        dailyRevenue,
+        packPopularity: packCounts,
+        avgAnalysesPerUser,
+        totalAnalyses: allAnalyses.length,
+        totalRevenue: allTx
+          .filter(t => t.status === "confirmed")
+          .reduce((s, t) => s + (parseFloat(t.pricePaid.replace(/[^0-9.]/g, "")) || 0), 0)
+          .toFixed(2),
+      });
+    } catch (err: any) {
+      console.error("Analytics error:", err);
+      res.status(500).json({ error: "Failed to generate analytics" });
+    }
   });
 
   return httpServer;

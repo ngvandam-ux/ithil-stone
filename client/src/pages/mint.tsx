@@ -67,6 +67,9 @@ export default function Mint() {
   const [step, setStep] = useState<PaymentStep>("select");
   const [copied, setCopied] = useState(false);
   const [txSignature, setTxSignature] = useState("");
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoResult, setPromoResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const { data: packs } = useQuery<RingPack[]>({
     queryKey: ["/api/ring-packs"],
@@ -165,6 +168,27 @@ export default function Mint() {
     if (!selectedPack) return;
     const ref = `stripe_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     stripeConfirm.mutate({ packId: selectedPack.id, sessionIdOrRef: ref });
+  };
+
+  const handleRedeemPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoLoading(true);
+    setPromoResult(null);
+    try {
+      const res = await apiRequest("POST", "/api/promo/redeem", { code: promoCode.trim() });
+      const data = await res.json();
+      if (data.success) {
+        setPromoResult({ success: true, message: `${data.ringsGranted} Mithril Rings added to your coffers!` });
+        queryClient.invalidateQueries({ queryKey: ["/api/credits"] });
+        setPromoCode("");
+      } else {
+        setPromoResult({ success: false, message: data.error || "Failed to redeem code" });
+      }
+    } catch (err: any) {
+      setPromoResult({ success: false, message: "Failed to redeem code" });
+    } finally {
+      setPromoLoading(false);
+    }
   };
 
   const resetFlow = () => {
@@ -286,6 +310,44 @@ export default function Mint() {
               <span>No account needed</span>
               <span>·</span>
               <span>Card or Crypto</span>
+            </div>
+
+            {/* Promo Code */}
+            <div className="mt-6 pt-6 border-t border-border/20">
+              <p className="text-xs text-muted-foreground text-center mb-3">
+                Have a promo code? Redeem it below.
+              </p>
+              <div className="flex items-center gap-2 max-w-sm mx-auto">
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                  placeholder="Enter code..."
+                  className="flex-1 h-9 px-3 rounded-lg border border-border bg-background text-sm font-mono uppercase tracking-wider placeholder:text-muted-foreground/40 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  data-testid="input-promo-code"
+                  onKeyDown={(e) => e.key === "Enter" && handleRedeemPromo()}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleRedeemPromo}
+                  disabled={promoLoading || !promoCode.trim()}
+                  className="gap-1.5"
+                  data-testid="button-redeem-promo"
+                >
+                  {promoLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  Redeem
+                </Button>
+              </div>
+              {promoResult && (
+                <p className={`text-xs text-center mt-2 ${promoResult.success ? "text-primary" : "text-destructive"}`}>
+                  {promoResult.message}
+                </p>
+              )}
             </div>
           </div>
         )}

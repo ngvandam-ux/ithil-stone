@@ -340,6 +340,21 @@ export default function CardTooltip({
     };
   }, []);
 
+  useEffect(() => {
+    if (!showTooltip) return;
+    const dismiss = (e: Event) => {
+      if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setShowTooltip(false);
+      }
+    };
+    document.addEventListener('touchstart', dismiss);
+    document.addEventListener('click', dismiss);
+    return () => {
+      document.removeEventListener('touchstart', dismiss);
+      document.removeEventListener('click', dismiss);
+    };
+  }, [showTooltip]);
+
   // If clearly a label, just render children as-is
   if (isLabel) {
     return <>{children}</>;
@@ -351,6 +366,34 @@ export default function CardTooltip({
       className="relative inline"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={(e) => {
+        // Mobile tap to toggle tooltip
+        if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (showTooltip) {
+            setShowTooltip(false);
+            return;
+          }
+          // Same position calc as hover
+          if (triggerRef.current) {
+            const rect = triggerRef.current.getBoundingClientRect();
+            setPosition({
+              top: rect.top > 340 || rect.top > (window.innerHeight - rect.bottom),
+              left: (window.innerWidth - rect.left) < 280,
+            });
+          }
+          // Load image if needed
+          if (!imageUrl) {
+            const cached = cardCache.get(key);
+            if (cached?.imageUrl) {
+              setImageUrl(cached.imageUrl);
+              setScryfallUrl(cached.scryfallUrl || null);
+            }
+          }
+          setShowTooltip(true);
+        }
+      }}
     >
       {/* The card name text — subtle underline hint for card names */}
       <span
