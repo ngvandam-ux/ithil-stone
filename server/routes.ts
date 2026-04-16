@@ -29,16 +29,27 @@ async function validateAnalysisSuggestions(
   format: string,
   deckCardNames: Set<string>
 ): Promise<string> {
-  // Extract all **Bold Card Names** from the analysis
+  // Strip out the Archetype ID section — it contains labels/descriptions, not card names
+  // Match from "ARCHETYPE ID" or "Archetype:" through to the next ## heading or major section
+  const strippedText = analysisText
+    .replace(/#{1,3}\s*(?:ARCHETYPE\s*ID|Archetype\s*Identification)[\s\S]*?(?=\n#{1,3}\s|$)/i, "")
+    .replace(/\*\s*\*\*Archetype:\*\*[^\n]*/gi, "")
+    .replace(/\*\s*\*\*Subtype:\*\*[^\n]*/gi, "")
+    .replace(/\*\s*\*\*Game\s*Plan:\*\*[^\n]*/gi, "")
+    .replace(/\*\s*\*\*Key\s*Payoffs:\*\*[^\n]*/gi, "")
+    .replace(/\*\s*\*\*Key\s*Enablers:\*\*[^\n]*/gi, "")
+    .replace(/\*\s*\*\*Cards\s*NOT\s*meant[^\n]*/gi, "");
+
+  // Extract all **Bold Card Names** from the analysis (excluding archetype section)
   const boldPattern = /\*\*([^*]+?)\*\*/g;
   const allBoldNames = new Set<string>();
   let match;
-  while ((match = boldPattern.exec(analysisText)) !== null) {
+  while ((match = boldPattern.exec(strippedText)) !== null) {
     const name = match[1].trim();
-    // Skip non-card-name bolds (headers, ratings, labels)
+    // Skip non-card-name bolds (headers, ratings, labels, descriptions)
     if (
       name.includes("/10") || name.includes("$") ||
-      /^(overall|consistency|ceiling|floor|meta|immediate|spicy|under|splurge|must|strong|budget|fav|even|unfav)/i.test(name) ||
+      /^(overall|consistency|ceiling|floor|meta|immediate|spicy|under|splurge|must|strong|budget|fav|even|unfav|archetype|subtype|game\s*plan|key\s*payoff|key\s*enabl|cards\s*not)/i.test(name) ||
       name.length < 2 || name.length > 50
     ) continue;
     allBoldNames.add(name);
