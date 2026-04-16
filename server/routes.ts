@@ -8,6 +8,40 @@ import Anthropic from "@anthropic-ai/sdk";
 import { Resend } from "resend";
 import { getMetaContext, getCrowdContext, recordDeckSubmission, getMetaCacheStats } from "./meta-fetcher";
 
+// ── AI cost tracking ─────────────────────────────────────────────────
+// Claude Opus 4.6 pricing: $5.00/M input, $25.00/M output
+const AI_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
+  "claude-opus-4-6": { inputPerMillion: 5.00, outputPerMillion: 25.00 },
+};
+
+async function logAiUsage(
+  callType: string,
+  model: string,
+  usage: { input_tokens: number; output_tokens: number },
+  meta?: Record<string, any>
+) {
+  const pricing = AI_PRICING[model] || { inputPerMillion: 5.00, outputPerMillion: 25.00 };
+  const inputCostCents = Math.round((usage.input_tokens / 1_000_000) * pricing.inputPerMillion * 100);
+  const outputCostCents = Math.round((usage.output_tokens / 1_000_000) * pricing.outputPerMillion * 100);
+  try {
+    await storage.logAiCost({
+      callType,
+      model,
+      inputTokens: usage.input_tokens,
+      outputTokens: usage.output_tokens,
+      inputCostCents,
+      outputCostCents,
+      totalCostCents: inputCostCents + outputCostCents,
+      metadata: meta ? JSON.stringify(meta) : null,
+      createdAt: new Date().toISOString(),
+    });
+    const totalCost = (inputCostCents + outputCostCents) / 100;
+    console.log(`[AI COST] ${callType}: ${usage.input_tokens} in / ${usage.output_tokens} out = $${totalCost.toFixed(4)}`);
+  } catch (err) {
+    console.warn("[AI COST] Failed to log:", err);
+  }
+}
+
 // ── Auth config ──────────────────────────────────────────────────────
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
@@ -682,6 +716,12 @@ FORMAT RULES:
     });
 
     const textBlock = message.content.find((b: any) => b.type === "text");
+
+    // Log AI cost
+    if (message.usage) {
+      logAiUsage("deck_analysis", "claude-opus-4-6", message.usage, { deckName, format });
+    }
+
     return (textBlock as any)?.text || generateFallbackAnalysis(deckName, format, entries, stats);
   } catch (err) {
     console.error("AI analysis failed:", err);
@@ -2354,6 +2394,11 @@ OUTPUT: Return ONLY the newsletter body content as clean text with markdown-styl
       const contentBlock = contentResponse.content.find((b: any) => b.type === "text");
       const markdownContent = (contentBlock as any)?.text || "Newsletter generation failed — no content returned.";
 
+      // Log newsletter content AI cost
+      if (contentResponse.usage) {
+        logAiUsage("newsletter_content", "claude-opus-4-6", contentResponse.usage, { newsletterType: type });
+      }
+
       // ── 5. Convert to HTML ─────────────────────────────────────────
       const htmlContent = buildNewsletterHtml(markdownContent, cardImageMap, type);
 
@@ -2386,6 +2431,12 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
 
         const socialBlock = socialResponse.content.find((b: any) => b.type === "text");
         const socialText = (socialBlock as any)?.text || "";
+
+        // Log social media AI cost
+        if (socialResponse.usage) {
+          logAiUsage("newsletter_social", "claude-opus-4-6", socialResponse.usage, { newsletterType: type });
+        }
+
         // Try to parse JSON, stripping potential markdown fences
         const cleaned = socialText.replace(/^```json\n?/, "").replace(/\n?```$/, "").trim();
         socialVersions = JSON.parse(cleaned);
@@ -2760,6 +2811,26 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
     } catch (err: any) {
       console.error("Traffic analytics error:", err);
       res.status(500).json({ error: "Failed to generate traffic analytics" });
+    }
+  });
+
+  // ── AI Cost Tracking ─────────────────────────────────────────────
+  app.get("/api/admin/ai-costs", requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const costs = await storage.getAiCosts(limit);
+      res.json(costs);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch AI costs" });
+    }
+  });
+
+  app.get("/api/admin/ai-costs/summary", requireAdmin, async (_req, res) => {
+    try {
+      const summary = await storage.getAiCostSummary();
+      res.json(summary);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to fetch AI cost summary" });
     }
   });
 

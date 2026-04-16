@@ -17,6 +17,7 @@ import {
   type Subscriber,
   type Setting,
   type NewsletterTask,
+  type AiCost,
   analyses,
   credits,
   transactions,
@@ -30,6 +31,7 @@ import {
   pageVisits,
   settings,
   newsletterTasks,
+  aiCosts,
 } from "@shared/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -163,6 +165,18 @@ export async function initializeDatabase() {
       created_at TEXT NOT NULL,
       used_at TEXT
     );
+    CREATE TABLE IF NOT EXISTS ai_costs (
+      id SERIAL PRIMARY KEY,
+      call_type TEXT NOT NULL,
+      model TEXT NOT NULL,
+      input_tokens INTEGER NOT NULL,
+      output_tokens INTEGER NOT NULL,
+      input_cost_cents INTEGER NOT NULL,
+      output_cost_cents INTEGER NOT NULL,
+      total_cost_cents INTEGER NOT NULL,
+      metadata TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 }
 
@@ -236,6 +250,11 @@ export interface IStorage {
   getNewsletterTasks(status?: string): Promise<NewsletterTask[]>;
   updateNewsletterTaskStatus(id: number, status: string): Promise<void>;
   deleteNewsletterTask(id: number): Promise<void>;
+
+  // AI costs
+  logAiCost(data: Omit<AiCost, "id">): Promise<AiCost>;
+  getAiCosts(limit?: number): Promise<AiCost[]>;
+  getAiCostSummary(): Promise<{ totalCostCents: number; totalCalls: number; byType: Record<string, { calls: number; costCents: number; inputTokens: number; outputTokens: number }> }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -764,6 +783,33 @@ export class DatabaseStorage implements IStorage {
 
   async deleteNewsletterTask(id: number): Promise<void> {
     await db.delete(newsletterTasks).where(eq(newsletterTasks.id, id));
+  }
+
+  // ── AI Costs ──────────────────────────────────────────────────────
+  async logAiCost(data: Omit<AiCost, "id">): Promise<AiCost> {
+    const [result] = await db.insert(aiCosts).values(data).returning();
+    return result;
+  }
+
+  async getAiCosts(limit = 100): Promise<AiCost[]> {
+    return await db.select().from(aiCosts).orderBy(desc(aiCosts.createdAt)).limit(limit);
+  }
+
+  async getAiCostSummary(): Promise<{ totalCostCents: number; totalCalls: number; byType: Record<string, { calls: number; costCents: number; inputTokens: number; outputTokens: number }> }> {
+    const allCosts = await db.select().from(aiCosts);
+    const byType: Record<string, { calls: number; costCents: number; inputTokens: number; outputTokens: number }> = {};
+    let totalCostCents = 0;
+    for (const row of allCosts) {
+      totalCostCents += row.totalCostCents;
+      if (!byType[row.callType]) {
+        byType[row.callType] = { calls: 0, costCents: 0, inputTokens: 0, outputTokens: 0 };
+      }
+      byType[row.callType].calls++;
+      byType[row.callType].costCents += row.totalCostCents;
+      byType[row.callType].inputTokens += row.inputTokens;
+      byType[row.callType].outputTokens += row.outputTokens;
+    }
+    return { totalCostCents, totalCalls: allCosts.length, byType };
   }
 }
 

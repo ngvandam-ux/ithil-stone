@@ -203,3 +203,19 @@ export const newsletterTasks = pgTable("newsletter_tasks", {
 });
 
 export type NewsletterTask = typeof newsletterTasks.$inferSelect;
+
+// ── AI costs table (token usage tracking) ────────────────────────────
+export const aiCosts = pgTable("ai_costs", {
+  id: serial("id").primaryKey(),
+  callType: text("call_type").notNull(), // 'deck_analysis' | 'newsletter_content' | 'newsletter_social'
+  model: text("model").notNull(), // 'claude-opus-4-6'
+  inputTokens: integer("input_tokens").notNull(),
+  outputTokens: integer("output_tokens").notNull(),
+  inputCostCents: integer("input_cost_cents").notNull(), // cost in cents (avoid float precision)
+  outputCostCents: integer("output_cost_cents").notNull(),
+  totalCostCents: integer("total_cost_cents").notNull(),
+  metadata: text("metadata"), // JSON string: { deckName, format } or { newsletterType }
+  createdAt: text("created_at").notNull(),
+});
+
+export type AiCost = typeof aiCosts.$inferSelect;
