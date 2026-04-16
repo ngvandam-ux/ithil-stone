@@ -356,99 +356,159 @@ function PowerRatingDisplay({
   );
 }
 
-// Render a single section's body content
-function SectionBody({ lines, knownCards }: { lines: string[]; knownCards?: Set<string> }) {
+// Parse markdown table rows into cells
+function parseTableRow(row: string): string[] {
+  return row.split("|").map(cell => cell.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+}
+
+function isTableSeparator(line: string): boolean {
+  return /^\|?[\s:]*[-]+[\s:]*\|/.test(line) && /[-]{2,}/.test(line);
+}
+
+// Render a markdown table
+function MarkdownTable({ rows, knownCards }: { rows: string[]; knownCards?: Set<string> }) {
+  if (rows.length < 2) return null;
+
+  const headerRow = parseTableRow(rows[0]);
+  // Find separator row
+  const sepIdx = rows.findIndex((r, i) => i > 0 && isTableSeparator(r));
+  const dataRows = rows.filter((_, i) => i !== 0 && (sepIdx === -1 || i !== sepIdx)).map(parseTableRow);
+
   return (
-    <div className="space-y-1.5">
-      {lines.map((line, i) => {
-        const trimmed = line.trim();
-        if (!trimmed) return null;
-        if (/^[-—–]{3,}$/.test(trimmed)) return null;
-
-        // H3: ### Subsection
-        if (trimmed.startsWith("### ")) {
-          return (
-            <h4
-              key={i}
-              className="font-display text-sm font-semibold text-foreground pt-3 pb-0.5"
-            >
-              {trimmed.replace(/^###\s+/, "")}
-            </h4>
-          );
-        }
-
-        // Bold-only lines as sub-headers
-        if (/^\*\*[^*]+\*\*[:.]?\s*$/.test(trimmed)) {
-          return (
-            <h4 key={i} className="text-sm font-semibold text-foreground pt-2.5 pb-0.5">
-              {trimmed.replace(/\*\*/g, "").replace(/[:.]$/, "")}
-            </h4>
-          );
-        }
-
-        // Bold key-value: **Key:** Description
-        if (trimmed.startsWith("**") && trimmed.includes("**")) {
-          const boldMatch = trimmed.match(
-            /^\*\*(.+?)\*\*\s*[:—–\-]?\s*(.*)/
-          );
-          if (boldMatch && boldMatch[2]) {
-            return (
-              <p key={i} className="text-sm text-foreground/85 leading-relaxed">
-                <CardTooltip cardName={boldMatch[1]} knownCards={knownCards}>
-                  <span className="font-semibold text-foreground">
-                    {boldMatch[1]}:
-                  </span>
-                </CardTooltip>{" "}
-                <span>{renderInlineMarkdown(boldMatch[2], knownCards)}</span>
-              </p>
-            );
-          }
-        }
-
-        // Bullet items — with nicer formatting
-        if (
-          trimmed.startsWith("- ") ||
-          trimmed.startsWith("• ") ||
-          trimmed.startsWith("* ")
-        ) {
-          const bulletContent = trimmed.replace(/^[-•*]\s*/, "");
-          return (
-            <div key={i} className="flex gap-2.5 text-sm text-foreground/85 pl-1">
-              <span className="text-primary/40 mt-1 shrink-0 select-none text-[8px]">
-                ◆
-              </span>
-              <span className="leading-relaxed">
-                {renderInlineMarkdown(bulletContent, knownCards)}
-              </span>
-            </div>
-          );
-        }
-
-        // Numbered list items
-        if (/^\d+\.\s/.test(trimmed)) {
-          const num = trimmed.match(/^(\d+)\./)?.[1];
-          const itemContent = trimmed.replace(/^\d+\.\s*/, "");
-          return (
-            <div key={i} className="flex gap-2.5 text-sm text-foreground/85 pl-1">
-              <span className="text-primary/50 font-mono text-xs mt-0.5 shrink-0 w-4 text-right font-medium">
-                {num}.
-              </span>
-              <span className="leading-relaxed">
-                {renderInlineMarkdown(itemContent, knownCards)}
-              </span>
-            </div>
-          );
-        }
-
-        // Regular paragraph
-        return (
-          <p key={i} className="text-sm text-foreground/80 leading-relaxed">
-            {renderInlineMarkdown(trimmed, knownCards)}
-          </p>
-        );
-      })}
+    <div className="overflow-x-auto my-2 rounded-lg border border-border/40">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-primary/5 border-b border-border/40">
+            {headerRow.map((cell, i) => (
+              <th key={i} className="px-3 py-2 text-left font-semibold text-foreground text-xs whitespace-nowrap">
+                {renderInlineMarkdown(cell, knownCards)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {dataRows.map((row, ri) => (
+            <tr key={ri} className={ri % 2 === 0 ? "bg-transparent" : "bg-primary/[0.02]"}>
+              {row.map((cell, ci) => (
+                <td key={ci} className="px-3 py-1.5 text-foreground/80 border-t border-border/20">
+                  {renderInlineMarkdown(cell, knownCards)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
+}
+
+// Render a single section's body content
+function SectionBody({ lines, knownCards }: { lines: string[]; knownCards?: Set<string> }) {
+  // Pre-process: group consecutive table lines
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+
+  while (i < lines.length) {
+    const trimmed = lines[i].trim();
+
+    // Detect table: line starts with | and contains at least one more |
+    if (trimmed.startsWith("|") && trimmed.indexOf("|", 1) > 0) {
+      const tableLines: string[] = [];
+      while (i < lines.length) {
+        const tl = lines[i].trim();
+        if (tl.startsWith("|") && tl.indexOf("|", 1) > 0) {
+          tableLines.push(tl);
+          i++;
+        } else {
+          break;
+        }
+      }
+      elements.push(<MarkdownTable key={`table-${i}`} rows={tableLines} knownCards={knownCards} />);
+      continue;
+    }
+
+    if (!trimmed) { i++; continue; }
+    if (/^[-—–]{3,}$/.test(trimmed)) { i++; continue; }
+
+    // H3: ### Subsection
+    if (trimmed.startsWith("### ")) {
+      elements.push(
+        <h4 key={i} className="font-display text-sm font-semibold text-foreground pt-3 pb-0.5">
+          {trimmed.replace(/^###\s+/, "")}
+        </h4>
+      );
+      i++; continue;
+    }
+
+    // Bold-only lines as sub-headers
+    if (/^\*\*[^*]+\*\*[:.]?\s*$/.test(trimmed)) {
+      elements.push(
+        <h4 key={i} className="text-sm font-semibold text-foreground pt-2.5 pb-0.5">
+          {trimmed.replace(/\*\*/g, "").replace(/[:.]$/, "")}
+        </h4>
+      );
+      i++; continue;
+    }
+
+    // Bold key-value: **Key:** Description
+    if (trimmed.startsWith("**") && trimmed.includes("**")) {
+      const boldMatch = trimmed.match(
+        /^\*\*(.+?)\*\*\s*[:—–\-]?\s*(.*)/
+      );
+      if (boldMatch && boldMatch[2]) {
+        elements.push(
+          <p key={i} className="text-sm text-foreground/85 leading-relaxed">
+            <CardTooltip cardName={boldMatch[1]} knownCards={knownCards}>
+              <span className="font-semibold text-foreground">
+                {boldMatch[1]}:
+              </span>
+            </CardTooltip>{" "}
+            <span>{renderInlineMarkdown(boldMatch[2], knownCards)}</span>
+          </p>
+        );
+        i++; continue;
+      }
+    }
+
+    // Bullet items
+    if (
+      trimmed.startsWith("- ") ||
+      trimmed.startsWith("• ") ||
+      trimmed.startsWith("* ")
+    ) {
+      const bulletContent = trimmed.replace(/^[-•*]\s*/, "");
+      elements.push(
+        <div key={i} className="flex gap-2.5 text-sm text-foreground/85 pl-1">
+          <span className="text-primary/40 mt-1 shrink-0 select-none text-[8px]">◆</span>
+          <span className="leading-relaxed">{renderInlineMarkdown(bulletContent, knownCards)}</span>
+        </div>
+      );
+      i++; continue;
+    }
+
+    // Numbered list items
+    if (/^\d+\.\s/.test(trimmed)) {
+      const num = trimmed.match(/^(\d+)\./)?.[1];
+      const itemContent = trimmed.replace(/^\d+\.\s*/, "");
+      elements.push(
+        <div key={i} className="flex gap-2.5 text-sm text-foreground/85 pl-1">
+          <span className="text-primary/50 font-mono text-xs mt-0.5 shrink-0 w-4 text-right font-medium">{num}.</span>
+          <span className="leading-relaxed">{renderInlineMarkdown(itemContent, knownCards)}</span>
+        </div>
+      );
+      i++; continue;
+    }
+
+    // Regular paragraph
+    elements.push(
+      <p key={i} className="text-sm text-foreground/80 leading-relaxed">
+        {renderInlineMarkdown(trimmed, knownCards)}
+      </p>
+    );
+    i++;
+  }
+
+  return <div className="space-y-1.5">{elements}</div>;
 }
 
 // Collapsible section component

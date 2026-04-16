@@ -183,7 +183,16 @@ function computeStats(cards: Array<{ quantity: number; data: any; section: strin
   let illegalCards: string[] = [];
 
   for (const { quantity, data, section } of cards) {
-    if (!data || section !== "mainboard") continue;
+    if (!data) continue;
+    // Count sideboard separately, include commander + mainboard in main stats
+    if (section === "sideboard") {
+      // Only count price for sideboard, skip other stats
+      if (data.prices?.usd) {
+        totalPrice += parseFloat(data.prices.usd) * quantity;
+        priceableCards += quantity;
+      }
+      continue;
+    }
 
     const typeLine = (data.type_line || "").toLowerCase();
 
@@ -241,7 +250,7 @@ function computeStats(cards: Array<{ quantity: number; data: any; section: strin
   }
 
   const nonLandCount = cards
-    .filter((c) => c.data && c.section === "mainboard" && !(c.data.type_line || "").toLowerCase().includes("land"))
+    .filter((c) => c.data && c.section !== "sideboard" && !(c.data.type_line || "").toLowerCase().includes("land"))
     .reduce((sum, c) => sum + c.quantity, 0);
 
   const avgCmc = nonLandCount > 0
@@ -263,7 +272,7 @@ function computeStats(cards: Array<{ quantity: number; data: any; section: strin
     enchantmentCount,
     artifactCount,
     otherCount,
-    totalCards: cards.filter((c) => c.section === "mainboard").reduce((sum, c) => sum + c.quantity, 0),
+    totalCards: cards.filter((c) => c.section !== "sideboard").reduce((sum, c) => sum + c.quantity, 0),
     sideboardCards: cards.filter((c) => c.section === "sideboard").reduce((sum, c) => sum + c.quantity, 0),
     avgCmc: Math.round(avgCmc * 100) / 100,
     totalPrice: Math.round(totalPrice * 100) / 100,
@@ -276,6 +285,7 @@ function buildCardSummary(
   cardDetails: Array<{ quantity: number; data: any; section: string }>,
   format: string
 ): string {
+  const commanders = cardDetails.filter((c) => c.data && c.section === "commander");
   const mainboard = cardDetails.filter((c) => c.data && c.section === "mainboard");
   const sideboard = cardDetails.filter((c) => c.data && c.section === "sideboard");
 
@@ -294,7 +304,15 @@ function buildCardSummary(
    ${oracleSnippet}`;
   };
 
-  let summary = "=== MAINBOARD ===\n";
+  let summary = "";
+
+  if (commanders.length > 0) {
+    summary += "=== COMMANDER ===\n";
+    summary += commanders.map(formatCardLine).join("\n\n");
+    summary += "\n\n";
+  }
+
+  summary += "=== MAINBOARD ===\n";
   summary += mainboard.map(formatCardLine).join("\n\n");
 
   if (sideboard.length > 0) {
@@ -393,6 +411,8 @@ Rules that override everything:
 3. Be honest. If the deck is bad, say it's bad. If a card choice is questionable, say so.
 4. Talk about specific cards and specific interactions, not abstract concepts.
 5. Use MTG terminology correctly (e.g., "curves out" not "plays cards in order", "goes under" not "is faster than").
+6. NEVER self-correct mid-sentence. No "wait, actually..." or "correction:" or "upon closer inspection..." Think before you write. If you're unsure about a card's ability, check the oracle text provided above BEFORE writing. Your output must read as confident and final — not as a stream-of-consciousness draft.
+7. NEVER hedge with "I'm going to assume..." or "The data seems incomplete..." You have the full deck data. If something looks off, state the fact directly.
 
 Structure your response with ## headers:
 
@@ -585,34 +605,45 @@ function parseMoxfieldResponse(data: any): { deckName: string; format: string; d
     const formatMap: Record<string, string> = {
       standard: "standard", modern: "modern", legacy: "legacy", vintage: "vintage",
       pioneer: "pioneer", pauper: "pauper", commander: "commander", edh: "commander",
-      historic: "historic", explorer: "explorer", brawl: "commander",
+      historic: "historic", explorer: "explorer", brawl: "commander", oathbreaker: "commander",
     };
     const rawFormat = (data.format || "").toLowerCase();
     const format = formatMap[rawFormat] || "";
 
     const lines: string[] = [];
 
-    // Process each board
-    const boards = ["mainboard", "sideboard", "commanders", "companions"];
-    for (const board of boards) {
-      const boardData = data[board];
-      if (!boardData || typeof boardData !== "object") continue;
-
-      if (board === "sideboard" && Object.keys(boardData).length > 0) {
+    // Helper to extract cards from a board object (v2 or v3 format)
+    const extractCards = (boardData: any, label?: string) => {
+      if (!boardData || typeof boardData !== "object") return;
+      // v3 format: { count: N, cards: { ... } }
+      const cards = boardData.cards || boardData;
+      if (!cards || typeof cards !== "object") return;
+      const entries = Object.values(cards);
+      if (entries.length === 0) return;
+      if (label) {
         lines.push("");
-        lines.push("Sideboard");
+        lines.push(label);
       }
-      if (board === "commanders" && Object.keys(boardData).length > 0) {
-        lines.push("");
-        lines.push("Commander");
-      }
-
-      for (const [, entry] of Object.entries(boardData)) {
+      for (const entry of entries) {
         const e = entry as any;
         const qty = e.quantity || 1;
         const name = e.card?.name || e.name || "";
         if (name) lines.push(`${qty} ${name}`);
       }
+    };
+
+    // v3 API: data.boards.mainboard.cards, data.boards.commanders.cards, etc.
+    if (data.boards && typeof data.boards === "object") {
+      extractCards(data.boards.commanders, "Commander");
+      extractCards(data.boards.companions, "Companion");
+      extractCards(data.boards.mainboard);
+      extractCards(data.boards.sideboard, "Sideboard");
+    } else {
+      // v2 API: data.mainboard, data.commanders, etc. are direct card maps
+      extractCards(data.commanders, "Commander");
+      extractCards(data.companions, "Companion");
+      extractCards(data.mainboard);
+      extractCards(data.sideboard, "Sideboard");
     }
 
     return { deckName, format, decklist: lines.join("\n") };
@@ -791,7 +822,7 @@ export async function registerRoutes(
   app.set("trust proxy", true);
   // ── Version check endpoint ──────────────────────────────────────
   app.get("/api/version", (_req, res) => {
-    res.json({ version: "abuse-prevention-v1", deployed: new Date().toISOString() });
+    res.json({ version: "reddit-feedback-v1", deployed: new Date().toISOString() });
   });
 
   // ── Middleware: session ID + auth resolution ────────────────────

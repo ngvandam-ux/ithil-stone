@@ -181,6 +181,8 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
   );
   const [quoteKey, setQuoteKey] = useState(0);
   const [imgLoaded, setImgLoaded] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [progress, setProgress] = useState(0);
 
   // Resolve artwork URL for current quote
   const artSrc = currentQuote.art ? ART_MAP[currentQuote.art] : undefined;
@@ -221,7 +223,38 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
     });
   }, [visible]);
 
+  // Elapsed timer + progress bar
+  useEffect(() => {
+    if (!visible) {
+      setElapsed(0);
+      setProgress(0);
+      return;
+    }
+    const start = Date.now();
+    const tick = setInterval(() => {
+      const secs = Math.floor((Date.now() - start) / 1000);
+      setElapsed(secs);
+      // Asymptotic progress: fast to 60%, slows to 90%, never hits 100%
+      // Typical analysis ~60-90s
+      const pct = secs < 10
+        ? secs * 4          // 0-40% in first 10s (card lookups)
+        : secs < 30
+        ? 40 + (secs - 10) * 1.5  // 40-70% in 10-30s (meta data)
+        : secs < 70
+        ? 70 + (secs - 30) * 0.5  // 70-90% in 30-70s (AI analysis)
+        : 90 + Math.min(8, (secs - 70) * 0.1); // 90-98% slow crawl
+      setProgress(Math.min(98, pct));
+    }, 500);
+    return () => clearInterval(tick);
+  }, [visible]);
+
   if (!visible) return null;
+
+  const formatTime = (s: number) => {
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return m > 0 ? `${m}:${sec.toString().padStart(2, "0")}` : `${sec}s`;
+  };
 
   return (
     <div
@@ -268,12 +301,27 @@ export default function LoadingOverlay({ visible }: LoadingOverlayProps) {
           </p>
         </div>
 
-        {/* Status message — what the stone is doing */}
-        <div className="flex items-center gap-2.5">
-          <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse" />
-          <p className="text-xs text-muted-foreground tracking-wide">
-            {statusMsg}
-          </p>
+        {/* Progress bar + status */}
+        <div className="w-64 sm:w-80 space-y-2">
+          {/* Progress bar */}
+          <div className="h-1 bg-border/30 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary/60 rounded-full transition-all duration-1000 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          {/* Status message + elapsed */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary/60 animate-pulse" />
+              <p className="text-xs text-muted-foreground tracking-wide">
+                {statusMsg}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground/50 font-mono">
+              {formatTime(elapsed)}
+            </p>
+          </div>
         </div>
       </div>
     </div>

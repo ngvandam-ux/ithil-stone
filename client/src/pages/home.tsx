@@ -423,7 +423,7 @@ export default function Home() {
                   </div>
                 </div>
                 <Textarea
-                  placeholder={`Inscribe your decklist here...\n\nFormat:\n4 Lightning Bolt\n4 Goblin Guide\n20 Mountain`}
+                  placeholder={`Paste your decklist here...\n\n4 Lightning Bolt\n4 Goblin Guide\n20 Mountain\n\nSupports Arena, MTGO, and Moxfield export formats`}
                   value={decklist}
                   onChange={(e) => setDecklist(e.target.value)}
                   rows={14}
@@ -436,10 +436,14 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <p className="text-xs text-muted-foreground">
                   <Coins className="w-3 h-3 inline mr-1" />
-                  1 Mithril Ring per vision ·{" "}
+                  1 ring (credit) per analysis ·{" "}
                   <span className="text-primary font-medium">
                     {creditsData?.coins ?? "..."} remaining
                   </span>
+                  {" "}·{" "}
+                  <Link href="/mint" className="text-primary/70 hover:text-primary underline underline-offset-2">
+                    Get more
+                  </Link>
                 </p>
                 <Button
                   onClick={handleAnalyze}

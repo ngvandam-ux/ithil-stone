@@ -259,7 +259,7 @@ export default function AppNav() {
                 </div>
               </TooltipTrigger>
               <TooltipContent>
-                <p className="text-xs">Mithril Rings — click to get more</p>
+                <p className="text-xs">Mithril Rings (analysis credits) — click to get more</p>
               </TooltipContent>
             </Tooltip>
           </Link>
