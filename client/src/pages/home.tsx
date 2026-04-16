@@ -494,6 +494,22 @@ export default function Home() {
                 </CardContent>
               </Card>
 
+              {/* Latest update notice */}
+              <div className="rounded-lg border border-primary/20 bg-primary/[0.03] p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <p className="text-xs font-semibold text-foreground">Latest Update — April 2026</p>
+                </div>
+                <ul className="space-y-1 text-xs text-muted-foreground">
+                  <li>◆ <span className="text-foreground/80 font-medium">Archetype-First Analysis</span> — the Stone now identifies your deck's strategy (reanimator, combo, aggro, etc.) before evaluating a single card. No more getting told to cut your reanimation targets for being "too expensive."</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Card Validation Layer</span> — every suggested card is verified against Scryfall for existence and format legality. Illegal suggestions get flagged automatically.</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Moxfield Import Fixed</span> — paste any Moxfield deck URL and it imports cleanly, including commander and sideboard.</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Better Loading</span> — progress bar with elapsed timer so you know it's working, not stuck.</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Newsletter Bonus</span> — subscribe and get +1 free ring to analyze another deck.</li>
+                </ul>
+                <p className="text-[10px] text-muted-foreground/40 italic">Built from real player feedback — keep it coming.</p>
+              </div>
+
               {/* Artwork divider 1 */}
               <div className="relative rounded-lg overflow-hidden my-4">
                 <img
