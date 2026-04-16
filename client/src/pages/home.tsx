@@ -506,6 +506,7 @@ export default function Home() {
                   <li>◆ <span className="text-foreground/80 font-medium">Moxfield Import Fixed</span> — paste any Moxfield deck URL and it imports cleanly, including commander and sideboard.</li>
                   <li>◆ <span className="text-foreground/80 font-medium">Better Loading</span> — progress bar with elapsed timer so you know it's working, not stuck.</li>
                   <li>◆ <span className="text-foreground/80 font-medium">Newsletter Bonus</span> — subscribe and get +1 free ring to analyze another deck.</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Crowdsourced Intelligence</span> — the Stone now learns from every deck analyzed. The more players use it, the smarter it gets — card popularity data from real submissions feeds directly into your analysis.</li>
                 </ul>
                 <p className="text-[10px] text-muted-foreground/40 italic">Built from real player feedback — keep it coming.</p>
               </div>
