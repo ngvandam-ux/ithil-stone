@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
@@ -70,6 +70,42 @@ export default function Mint() {
   const [promoCode, setPromoCode] = useState("");
   const [promoLoading, setPromoLoading] = useState(false);
   const [promoResult, setPromoResult] = useState<{ success: boolean; message: string } | null>(null);
+  const autoRedeemed = useRef(false);
+
+  // Auto-redeem promo code from URL: /#/mint?promo=CODE
+  useEffect(() => {
+    if (autoRedeemed.current) return;
+    const hash = window.location.hash; // e.g. "#/mint?promo=REDDIT5"
+    const qIndex = hash.indexOf("?");
+    if (qIndex === -1) return;
+    const params = new URLSearchParams(hash.slice(qIndex));
+    const code = params.get("promo");
+    if (!code) return;
+    autoRedeemed.current = true;
+    setPromoCode(code.toUpperCase());
+    // Auto-redeem after a short delay so the UI renders first
+    setTimeout(async () => {
+      setPromoLoading(true);
+      try {
+        const res = await apiRequest("POST", "/api/promo/redeem", { code: code.trim() });
+        const data = await res.json();
+        if (data.success) {
+          setPromoResult({ success: true, message: `${data.ringsGranted} Mithril Rings added to your coffers!` });
+          queryClient.invalidateQueries({ queryKey: ["/api/credits"] });
+          setPromoCode("");
+        } else {
+          setPromoResult({ success: false, message: data.error || "Failed to redeem code" });
+        }
+      } catch {
+        setPromoResult({ success: false, message: "Failed to redeem code" });
+      } finally {
+        setPromoLoading(false);
+        // Clean the promo param from URL without reloading
+        const cleanHash = hash.slice(0, qIndex);
+        window.history.replaceState(null, "", cleanHash || "#/mint");
+      }
+    }, 500);
+  }, []);
 
   const { data: packs } = useQuery<RingPack[]>({
     queryKey: ["/api/ring-packs"],
