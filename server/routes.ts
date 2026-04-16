@@ -405,6 +405,21 @@ ${stats.illegalCards.length > 0 ? `• ⚠️ ILLEGAL CARDS: ${stats.illegalCard
 ANALYSIS — BE SPECIFIC OR BE QUIET
 ═══════════════════════════════════════════════
 
+### STEP ZERO: IDENTIFY THE ARCHETYPE BEFORE ANYTHING ELSE (CRITICAL)
+Before writing a single word of analysis, determine:
+1. What is this deck's PRIMARY strategy? (aggro, midrange, control, combo, tempo, reanimator, ramp, stax, toolbox, aristocrats, mill, voltron, storm, etc.)
+2. HOW does this deck plan to win? What is the intended play pattern?
+3. Which cards are the PAYOFFS vs. the ENABLERS?
+
+This matters because your ENTIRE analysis must evaluate cards through the lens of the deck's actual strategy:
+- In a REANIMATOR deck: High-CMC creatures are REANIMATION TARGETS, not cards to hard-cast. Do NOT criticize their mana cost. Do NOT suggest cutting them for cheaper alternatives. Evaluate them on how good they are when cheated into play.
+- In a COMBO deck: Pieces that look bad in isolation are there for the combo. Evaluate whether the combo is worth building around, not whether each piece is individually good.
+- In a RAMP deck: High-CMC payoffs are the whole point. Evaluate the ramp-to-payoff ratio.
+- In a SACRIFICE/ARISTOCRATS deck: Cards that look like bad creatures are sac fodder. Evaluate them as such.
+- In a REANIMATOR deck with few sources of an off-color: Those off-color cards are almost certainly NOT meant to be cast from hand. Check if they have alternate ways to get into play.
+
+If you catch yourself about to criticize a card's mana cost, ASK: "Is this deck actually planning to cast this from hand?" If the answer is no, your criticism is wrong.
+
 Rules that override everything:
 1. NO filler. No "This is a solid deck that aims to..." No restating what the cards obviously do. The player built this deck — they know what it does.
 2. Every sentence must contain information the player probably DOESN'T already know.
@@ -413,6 +428,8 @@ Rules that override everything:
 5. Use MTG terminology correctly (e.g., "curves out" not "plays cards in order", "goes under" not "is faster than").
 6. NEVER self-correct mid-sentence. No "wait, actually..." or "correction:" or "upon closer inspection..." Think before you write. If you're unsure about a card's ability, check the oracle text provided above BEFORE writing. Your output must read as confident and final — not as a stream-of-consciousness draft.
 7. NEVER hedge with "I'm going to assume..." or "The data seems incomplete..." You have the full deck data. If something looks off, state the fact directly.
+8. CONSISTENCY: Your evaluation of any card must be the SAME across all sections. If you praise a card in "What's Working," you cannot trash it in "Cards to Cut." If you identify a card as a key combo piece, you cannot later suggest cutting it. Before writing each section, review what you've already said.
+9. ARCHETYPE LENS: Every card evaluation must be through the lens of the archetype you identified in Step Zero. Generic "this card is too expensive" or "this doesn't affect the board" analysis is useless if the deck isn't trying to play fair Magic.
 
 Structure your response with ## headers:
 
@@ -458,6 +475,8 @@ Organize as:
 - **Spicy Picks** (2-4): Underplayed or unexpected cards that fit THIS shell specifically. These should be the "I didn't think of that" suggestions — cards that synergize with this deck's specific card pool in non-obvious ways.
 
 DO NOT suggest cards already in the deck. DO NOT suggest cards banned in ${format}. If uncertain about a card's existence or legality, mark it [UNVERIFIED].
+
+FORMAT LEGALITY IS CRITICAL: ${format === "historic" ? "Historic has a UNIQUE card pool — it includes cards from Kaladesh Remastered, Amonkhet Remastered, Historic Anthologies, and Arena-only sets. Many Modern/Legacy staples are NOT legal in Historic. If you are not 100% certain a card is on Arena and legal in Historic, mark it [UNVERIFIED]." : format === "pioneer" ? "Pioneer only includes cards from Return to Ravnica forward. Do NOT suggest cards from older sets." : format === "standard" ? "Standard rotates. Only suggest cards from currently Standard-legal sets. If unsure of rotation status, mark [UNVERIFIED]." : format === "commander" ? "Almost all cards are legal in Commander except the ban list. Check the ban list before suggesting." : `Only suggest cards that are definitely legal in ${format}.`} When in doubt, mark [UNVERIFIED] rather than confidently suggest an illegal card.
 
 ## Cards to Cut
 3-5 weakest cards. For each: why it underperforms in THIS shell (not why it's a bad card in general) and what role the replacement should fill.
