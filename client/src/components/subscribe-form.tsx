@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Mail, Loader2, Check } from "lucide-react";
+import { Mail, Loader2, Check, Coins } from "lucide-react";
 
 interface SubscribeFormProps {
   source?: string;
@@ -12,15 +12,20 @@ export default function SubscribeForm({ source = "website", compact = false }: S
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [bonusGranted, setBonusGranted] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.includes("@")) return;
     setStatus("loading");
     try {
-      await apiRequest("POST", "/api/subscribe", { email: email.trim(), source });
+      const res = await apiRequest("POST", "/api/subscribe", { email: email.trim(), source });
+      const data = await res.json();
+      setBonusGranted(data.bonusGranted || false);
       setStatus("success");
       setEmail("");
+      // Refresh credit balance in nav
+      queryClient.invalidateQueries({ queryKey: ["/api/credits"] });
     } catch (err: any) {
       setStatus("error");
       setErrorMsg(err.message || "Failed to subscribe");
@@ -29,11 +34,17 @@ export default function SubscribeForm({ source = "website", compact = false }: S
 
   if (status === "success") {
     return (
-      <div className={`flex items-center gap-2 ${compact ? "" : "justify-center py-3"}`}>
+      <div className={`flex flex-col items-center gap-1 ${compact ? "" : "py-3"}`}>
         <div className="flex items-center gap-2 text-primary">
           <Check className="w-4 h-4" />
           <span className="text-sm font-medium">Subscribed to the dispatches</span>
         </div>
+        {bonusGranted && (
+          <div className="flex items-center gap-1.5 text-xs text-primary/70 animate-in fade-in">
+            <Coins className="w-3 h-3" />
+            <span>+1 bonus ring granted</span>
+          </div>
+        )}
       </div>
     );
   }
@@ -71,6 +82,11 @@ export default function SubscribeForm({ source = "website", compact = false }: S
       </Button>
       {status === "error" && (
         <span className="text-xs text-destructive">{errorMsg}</span>
+      )}
+      {status === "idle" && (
+        <span className="text-[10px] text-primary/50 flex items-center gap-1">
+          <Coins className="w-2.5 h-2.5" />+1 free ring
+        </span>
       )}
     </form>
   );

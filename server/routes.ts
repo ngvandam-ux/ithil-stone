@@ -1439,8 +1439,28 @@ export async function registerRoutes(
       if (!email || typeof email !== "string" || !email.includes("@")) {
         return res.status(400).json({ error: "Valid email is required" });
       }
-      const subscriber = await storage.addSubscriber(email.toLowerCase().trim(), source || "website");
-      res.json({ success: true, status: subscriber.status });
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Check if already subscribed (no double-dipping on bonus)
+      const existing = await storage.getSubscriberByEmail(normalizedEmail);
+      const subscriber = await storage.addSubscriber(normalizedEmail, source || "website");
+
+      // Grant +1 bonus ring for NEW subscribers only
+      let bonusGranted = false;
+      if (!existing) {
+        const sessionId = req.headers["x-session-id"] as string;
+        if (sessionId) {
+          try {
+            await storage.addCoins(sessionId, 1);
+            bonusGranted = true;
+          } catch (e) {
+            // Non-critical — don't block subscribe if coin grant fails
+            console.error("Newsletter bonus coin failed:", e);
+          }
+        }
+      }
+
+      res.json({ success: true, status: subscriber.status, bonusGranted, bonusAmount: bonusGranted ? 1 : 0 });
     } catch (err: any) {
       console.error("Subscribe error:", err);
       res.status(500).json({ error: "Failed to subscribe" });
