@@ -23,6 +23,86 @@ function generateToken(): string {
   return randomBytes(32).toString("hex");
 }
 
+// ── Post-analysis card validation ─────────────────────────────────────
+async function validateAnalysisSuggestions(
+  analysisText: string,
+  format: string,
+  deckCardNames: Set<string>
+): Promise<string> {
+  // Extract all **Bold Card Names** from the analysis
+  const boldPattern = /\*\*([^*]+?)\*\*/g;
+  const allBoldNames = new Set<string>();
+  let match;
+  while ((match = boldPattern.exec(analysisText)) !== null) {
+    const name = match[1].trim();
+    // Skip non-card-name bolds (headers, ratings, labels)
+    if (
+      name.includes("/10") || name.includes("$") ||
+      /^(overall|consistency|ceiling|floor|meta|immediate|spicy|under|splurge|must|strong|budget|fav|even|unfav)/i.test(name) ||
+      name.length < 2 || name.length > 50
+    ) continue;
+    allBoldNames.add(name);
+  }
+
+  // Separate deck cards (already verified) from suggested cards
+  const suggestedCards = [...allBoldNames].filter(
+    name => !deckCardNames.has(name.toLowerCase())
+  );
+
+  if (suggestedCards.length === 0) return analysisText;
+
+  // Batch-check suggested cards against Scryfall (respect 10 req/sec rate limit)
+  const validationResults = new Map<string, { exists: boolean; legal: boolean; actualName?: string }>();
+
+  for (let i = 0; i < suggestedCards.length; i++) {
+    const cardName = suggestedCards[i];
+    try {
+      if (i > 0 && i % 8 === 0) await new Promise(r => setTimeout(r, 1100));
+      const res = await fetch(
+        `https://api.scryfall.com/cards/named?fuzzy=${encodeURIComponent(cardName.trim())}`
+      );
+      if (!res.ok) {
+        validationResults.set(cardName, { exists: false, legal: false });
+        continue;
+      }
+      const data = await res.json();
+      const legality = data.legalities?.[format];
+      const isLegal = legality === "legal" || legality === "restricted";
+      validationResults.set(cardName, { exists: true, legal: isLegal, actualName: data.name });
+    } catch {
+      validationResults.set(cardName, { exists: true, legal: true });
+    }
+  }
+
+  // Tag invalid suggestions in the output
+  let validated = analysisText;
+  for (const [cardName, result] of validationResults) {
+    if (!result.exists) {
+      validated = validated.replace(
+        new RegExp(`\\*\\*${escapeRegex(cardName)}\\*\\*`, "g"),
+        `**${cardName}** \u26a0\ufe0f [CARD NOT FOUND]`
+      );
+      console.warn(`[VALIDATION] Card not found: "${cardName}" in ${format}`);
+    } else if (!result.legal) {
+      validated = validated.replace(
+        new RegExp(`\\*\\*${escapeRegex(cardName)}\\*\\*`, "g"),
+        `**${cardName}** \u26a0\ufe0f [NOT LEGAL in ${format}]`
+      );
+      console.warn(`[VALIDATION] Illegal card: "${cardName}" not legal in ${format}`);
+    }
+  }
+
+  const flagged = [...validationResults].filter(([, r]) => !r.exists || !r.legal);
+  if (flagged.length > 0) {
+    console.log(`[VALIDATION] Checked ${suggestedCards.length} suggested cards, flagged ${flagged.length}`);
+  }
+  return validated;
+}
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 // ── Scryfall card lookup ──────────────────────────────────────────────
 async function lookupCard(cardName: string): Promise<any> {
   try {
@@ -433,8 +513,19 @@ Rules that override everything:
 
 Structure your response with ## headers:
 
+## Archetype ID
+You MUST start with this. Commit to the classification before writing anything else. Use this exact format:
+- **Archetype:** [e.g., Reanimator, Aggro, Midrange, Control, Combo, Tempo, Ramp, Aristocrats, Stax, Voltron, Mill, Storm, Toolbox, etc.]
+- **Subtype:** [e.g., Mardu Reanimator, Mono-Red Burn, Azorius Control, etc.]
+- **Game Plan:** 1-2 sentences. How does this deck win?
+- **Key Payoffs:** List the 3-5 cards this deck is built around
+- **Key Enablers:** List the 3-5 cards that make the payoffs work
+- **Cards NOT meant to be hard-cast:** List any cards that are reanimation targets, cheat-into-play targets, or otherwise not intended to be cast for their mana cost. This is critical for your later evaluation — do NOT criticize these cards for their CMC.
+
+EVERYTHING below must be evaluated through the lens of this archetype. If you classified this as Reanimator, every card evaluation must ask "is this good in a reanimator shell?" not "is this a generically good card?"
+
 ## The Verdict
-2-3 sentences max. What is this deck trying to do, how well does it do it. Be blunt. Then provide:
+2-3 sentences max. How well does this deck execute the game plan you identified above? Be blunt. Then provide:
 
 | Dimension | Rating | Note |
 |-----------|--------|------|
@@ -1180,7 +1271,11 @@ export async function registerRoutes(
       stats.illegalCards = illegalCards;
 
       // AI analysis
-      const analysisText = await aiAnalysis(deckName, format, entries, stats, cardDetails);
+      const rawAnalysis = await aiAnalysis(deckName, format, entries, stats, cardDetails);
+
+      // Post-analysis validation: check suggested cards against Scryfall
+      const deckCardNames = new Set(entries.map(e => e.name.toLowerCase()));
+      const analysisText = await validateAnalysisSuggestions(rawAnalysis, format, deckCardNames);
 
       // Deduct coin
       await storage.deductCoin(sessionId);

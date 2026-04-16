@@ -188,7 +188,8 @@ function renderInlineMarkdown(
   text: string,
   knownCards?: Set<string>
 ): React.ReactNode {
-  const parts = text.split(/(\*\*\*.*?\*\*\*|\*\*.*?\*\*)/g);
+  // Split on bold patterns AND validation warning tags
+  const parts = text.split(/(\*\*\*.*?\*\*\*|\*\*.*?\*\*|\u26a0\ufe0f \[.*?\])/g);
   return parts.map((part, i) => {
     if (part.startsWith("***") && part.endsWith("***")) {
       const inner = part.slice(3, -3);
@@ -204,6 +205,14 @@ function renderInlineMarkdown(
         <CardTooltip key={i} cardName={inner} knownCards={knownCards}>
           <span className="font-semibold text-foreground">{inner}</span>
         </CardTooltip>
+      );
+    }
+    // Validation warning tags
+    if (part.startsWith("\u26a0\ufe0f [") && part.endsWith("]")) {
+      return (
+        <span key={i} className="text-xs font-medium text-red-400/80 ml-1">
+          {part}
+        </span>
       );
     }
     return part;
