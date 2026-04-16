@@ -73,7 +73,7 @@ export async function initializeDatabase() {
       id SERIAL PRIMARY KEY,
       session_id TEXT NOT NULL UNIQUE,
       user_id TEXT,
-      coins INTEGER NOT NULL DEFAULT 3,
+      coins INTEGER NOT NULL DEFAULT 1,
       ip_address TEXT,
       created_at TEXT
     );
@@ -379,8 +379,8 @@ export class DatabaseStorage implements IStorage {
     }
 
     // ── ABUSE PREVENTION: Check if this IP already has credit rows ──
-    // If so, this is likely session churning — give 0 coins instead of 3
-    let initialCoins = 3;
+    // If so, this is likely session churning — give 0 coins instead of 1
+    let initialCoins = 1;
     if (ipAddress) {
       const ipCredits = await this.getCreditsByIp(ipAddress);
       if (ipCredits.length > 0) {

@@ -339,7 +339,7 @@ export default function Home() {
                   across Standard, Modern, Pioneer, Legacy, and Commander.
                 </p>
                 <p className="text-xs text-muted-foreground/50 mt-2">
-                  3 free analyses per session · All MTG formats supported
+                  1 free analysis to start · All MTG formats supported
                 </p>
               </div>
             </div>
