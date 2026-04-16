@@ -2035,11 +2035,16 @@ OUTPUT: Return ONLY the newsletter body content as clean text with markdown-styl
       try {
         const socialPrompt = `Based on this newsletter content, generate condensed social media versions for each platform. Return a JSON object with keys: discord, bluesky, x, reddit.
 
-Rules:
-- discord: embed-style message with the lead story + 2 bullet takes. Use markdown formatting.
-- bluesky: array of 3-4 posts, each under 300 characters. Lead with the spiciest take.
-- x: array of 3-4 tweets, each under 280 characters. Thread format with 1/ 2/ 3/ numbering.
-- reddit: long-form post for r/magicTCG with genuine community voice (not marketing-speak). Include a title field.
+VOICE (use this across ALL platforms):
+You write like a crossover between Dave Barry and Terry Pratchett. Short punchy paragraphs. Absurd comparisons played completely straight. Parenthetical asides that are funnier than the main sentence. Dry wit that lands three words late. Mock-serious authority over competitive cardboard. You're an old-school tournament player since 1994 who loves classic Magic and finds modern card design pushed and overpowered. Universes Beyond crossovers (TMNT, Marvel, etc.) get mild disdain — LOTR is the one exception. Subtle LOTR references are welcome. Never talk down to the reader — they're in on the joke.
+
+Platform rules:
+- discord: embed-style message with the lead story + 2 bullet takes. Use markdown formatting. Voice should feel like a grizzled veteran posting in #mtg-general.
+- bluesky: array of 3-4 posts, each under 300 characters. Lead with the spiciest hot take. Each post should make someone want to hit repost.
+- x: array of 3-4 tweets, each under 280 characters. Thread format with 1/ 2/ 3/ numbering. Punchy, funny, opinionated. The kind of tweets that get quote-tweeted.
+- reddit: long-form post for r/magicTCG. Genuine community voice (NOT marketing-speak). Include a title field. Should read like the funniest person in the comments section wrote a self-post. Footnotes welcome.
+
+All posts should promote ithilstone.gg naturally — mention the palant\u00edr, the Stone, or the deck analyzer in a way that feels organic, not like an ad.
 
 Newsletter content:
 ${markdownContent}
@@ -2048,7 +2053,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
 
         const socialResponse = await anthropicClient.messages.create({
           model: "claude-opus-4-6",
-          max_tokens: 2000,
+          max_tokens: 3000,
           messages: [{ role: "user", content: socialPrompt }],
         });
 
