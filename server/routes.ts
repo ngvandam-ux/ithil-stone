@@ -103,6 +103,62 @@ function escapeRegex(str: string): string {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// ── Crowdsourced card intelligence cache ──────────────────────────────
+const crowdCache = new Map<string, { data: string; fetchedAt: number; deckCount: number }>();
+const CROWD_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+
+async function getCrowdsourcedContext(format: string, storage: any): Promise<string> {
+  const cached = crowdCache.get(format);
+  if (cached && Date.now() - cached.fetchedAt < CROWD_CACHE_TTL) {
+    return cached.data;
+  }
+
+  try {
+    const frequencies = await storage.getCardFrequenciesByFormat(format);
+    if (frequencies.length === 0) {
+      crowdCache.set(format, { data: "", fetchedAt: Date.now(), deckCount: 0 });
+      return "";
+    }
+
+    // Count total unique decks analyzed in this format
+    const maxDeckCount = frequencies[0]?.deckCount || 0;
+
+    // Filter: only include cards that appear in at least 2 decks (avoid noise from single submissions)
+    // Take top 60 non-basic-land cards
+    const basicLands = new Set(["plains", "island", "swamp", "mountain", "forest",
+      "snow-covered plains", "snow-covered island", "snow-covered swamp", "snow-covered mountain", "snow-covered forest",
+      "wastes"]);
+
+    const meaningful = frequencies
+      .filter(f => f.deckCount >= 2 && !basicLands.has(f.cardName))
+      .slice(0, 60);
+
+    if (meaningful.length === 0) {
+      crowdCache.set(format, { data: "", fetchedAt: Date.now(), deckCount: 0 });
+      return "";
+    }
+
+    const lines = meaningful.map(f => {
+      const pct = maxDeckCount > 0 ? Math.round((f.deckCount / maxDeckCount) * 100) : 0;
+      return `  ${f.cardName} — in ${f.deckCount} decks (${pct}% of ${format} submissions)`;
+    });
+
+    const context = `\n═══════════════════════════════════════════════
+CROWDSOURCED INTELLIGENCE (from ${maxDeckCount}+ real ${format} decks analyzed on this platform)
+═══════════════════════════════════════════════
+Most commonly played cards in ${format} (by our users):
+${lines.join("\n")}
+
+Use this data to calibrate your suggestions. If a card appears in 50%+ of submitted decks, it's likely a format staple. If the user's deck is missing a high-frequency card, consider whether it belongs. This is REAL user data, not generic recommendations.`;
+
+    crowdCache.set(format, { data: context, fetchedAt: Date.now(), deckCount: maxDeckCount });
+    return context;
+  } catch (err) {
+    console.error("Crowdsourced context error:", err);
+    return "";
+  }
+}
+
 // ── Scryfall card lookup ──────────────────────────────────────────────
 async function lookupCard(cardName: string): Promise<any> {
   try {
@@ -416,8 +472,11 @@ async function aiAnalysis(
   // Fetch live metagame data (cached, 6hr TTL)
   const formatContext = await getMetaContext(format);
 
-  // Fetch crowdsourced intelligence from user-submitted decks
+  // Fetch crowdsourced intelligence from tournament data
   const crowdContext = await getCrowdContext(format, storage);
+
+  // Fetch user-submitted deck frequency data
+  const userCrowdContext = await getCrowdsourcedContext(format, storage);
 
   // Color fixing analysis
   const colorPips = Object.entries(stats.totalPips)
@@ -457,12 +516,14 @@ async function aiAnalysis(
 Distinguish between these when making claims:
 1. VERIFIED DECK DATA — the Scryfall card data provided below (highest confidence)
 2. TOURNAMENT DATA — metagame context provided below from recent events
-3. YOUR ANALYSIS — your own card evaluation and synergy scoring (label this as opinion)
+3. USER COMMUNITY DATA — crowdsourced card frequencies from real user deck submissions on this platform
+4. YOUR ANALYSIS — your own card evaluation and synergy scoring (label this as opinion)
 
 Do NOT present your opinions as tournament data. If you're making a meta call based on your knowledge rather than the data below, say so.
 
 ${formatContext}
 ${crowdContext}
+${userCrowdContext}
 ═══════════════════════════════════════════════
 DECK: "${deckName}" (${format})
 ${stats.totalCards} mainboard${stats.sideboardCards > 0 ? ` + ${stats.sideboardCards} sideboard` : ""}

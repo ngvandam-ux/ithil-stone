@@ -183,6 +183,7 @@ export interface IStorage {
   getAnalysesBySession(sessionId: string): Promise<Analysis[]>;
   getAnalysesByUser(userId: string): Promise<Analysis[]>;
   getAnalysesByFormat(format: string): Promise<Analysis[]>;
+  getCardFrequenciesByFormat(format: string): Promise<Array<{ cardName: string; count: number; deckCount: number }>>;
 
   // Credits
   getCredits(sessionId: string): Promise<Credit | undefined>;
@@ -308,6 +309,48 @@ export class DatabaseStorage implements IStorage {
       .from(analyses)
       .where(eq(analyses.format, format))
       .orderBy(desc(analyses.id));
+  }
+
+  async getCardFrequenciesByFormat(
+    format: string
+  ): Promise<Array<{ cardName: string; count: number; deckCount: number }>> {
+    // Get all decklists for this format
+    const rows = await db
+      .select({ decklist: analyses.decklist })
+      .from(analyses)
+      .where(eq(analyses.format, format));
+
+    // Parse and aggregate card frequencies
+    const cardCounts = new Map<string, { total: number; decks: number }>();
+    for (const row of rows) {
+      const seenInDeck = new Set<string>();
+      const lines = (row.decklist || "").split("\n");
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        // Skip section headers
+        if (/^(sideboard|commander|companion)$/i.test(trimmed)) continue;
+        // Parse "4 Lightning Bolt" or "4x Lightning Bolt"
+        const match = trimmed.match(/^(\d+)x?\s+(.+)$/i);
+        if (!match) continue;
+        const qty = parseInt(match[1], 10);
+        const name = match[2].trim();
+        if (!name) continue;
+        const lower = name.toLowerCase();
+        const existing = cardCounts.get(lower) || { total: 0, decks: 0 };
+        existing.total += qty;
+        if (!seenInDeck.has(lower)) {
+          existing.decks += 1;
+          seenInDeck.add(lower);
+        }
+        cardCounts.set(lower, existing);
+      }
+    }
+
+    // Sort by deck count (how many decks include it), then by total copies
+    return [...cardCounts.entries()]
+      .map(([name, data]) => ({ cardName: name, count: data.total, deckCount: data.decks }))
+      .sort((a, b) => b.deckCount - a.deckCount || b.count - a.count);
   }
 
   // ── Credits ────────────────────────────────────────────────────────
