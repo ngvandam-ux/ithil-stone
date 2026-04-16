@@ -73,8 +73,13 @@ export async function initializeDatabase() {
       id SERIAL PRIMARY KEY,
       session_id TEXT NOT NULL UNIQUE,
       user_id TEXT,
-      coins INTEGER NOT NULL DEFAULT 3
+      coins INTEGER NOT NULL DEFAULT 3,
+      ip_address TEXT,
+      created_at TEXT
     );
+    -- Add columns if they don't exist (safe for existing DBs)
+    ALTER TABLE credits ADD COLUMN IF NOT EXISTS ip_address TEXT;
+    ALTER TABLE credits ADD COLUMN IF NOT EXISTS created_at TEXT;
     CREATE TABLE IF NOT EXISTS transactions (
       id SERIAL PRIMARY KEY,
       session_id TEXT NOT NULL,
@@ -182,7 +187,8 @@ export interface IStorage {
   // Credits
   getCredits(sessionId: string): Promise<Credit | undefined>;
   getCreditsByUser(userId: string): Promise<Credit | undefined>;
-  initCredits(sessionId: string, userId?: string): Promise<Credit>;
+  initCredits(sessionId: string, userId?: string, ipAddress?: string): Promise<Credit>;
+  getCreditsByIp(ipAddress: string): Promise<Credit[]>;
   deductCoin(sessionId: string): Promise<Credit | undefined>;
   addCoins(sessionId: string, amount: number): Promise<Credit | undefined>;
 
@@ -321,16 +327,19 @@ export class DatabaseStorage implements IStorage {
     return credit;
   }
 
-  async initCredits(sessionId: string, userId?: string): Promise<Credit> {
+  async getCreditsByIp(ipAddress: string): Promise<Credit[]> {
+    return db.select().from(credits).where(eq(credits.ipAddress, ipAddress));
+  }
+
+  async initCredits(sessionId: string, userId?: string, ipAddress?: string): Promise<Credit> {
     // If userId provided, check for existing user credits first
     if (userId) {
       const userCredit = await this.getCreditsByUser(userId);
       if (userCredit) {
         // If user has a credit record but on a different session, update sessionId
-        // so deductCoin/addCoins work with the current session
         if (userCredit.sessionId !== sessionId) {
           await db.update(credits)
-            .set({ sessionId })
+            .set({ sessionId, ipAddress: ipAddress || userCredit.ipAddress })
             .where(eq(credits.id, userCredit.id));
           return { ...userCredit, sessionId };
         }
@@ -346,27 +355,50 @@ export class DatabaseStorage implements IStorage {
           .where(eq(credits.sessionId, sessionId));
         return { ...existing, userId };
       }
+      // Update IP if we have one and it's missing
+      if (ipAddress && !existing.ipAddress) {
+        await db.update(credits)
+          .set({ ipAddress })
+          .where(eq(credits.sessionId, sessionId));
+      }
       return existing;
     }
     // New credit record — but if logged in and user already has ANY credit row
     // (even on an old session), DON'T give free rings again
     if (userId) {
-      // Double-check: might have a row with a stale sessionId
       const [anyUserCredit] = await db
         .select()
         .from(credits)
         .where(eq(credits.userId, userId));
       if (anyUserCredit) {
-        // Point existing record to the current session
         await db.update(credits)
           .set({ sessionId })
           .where(eq(credits.id, anyUserCredit.id));
         return { ...anyUserCredit, sessionId };
       }
     }
+
+    // ── ABUSE PREVENTION: Check if this IP already has credit rows ──
+    // If so, this is likely session churning — give 0 coins instead of 3
+    let initialCoins = 3;
+    if (ipAddress) {
+      const ipCredits = await this.getCreditsByIp(ipAddress);
+      if (ipCredits.length > 0) {
+        // This IP already used free tokens on another session
+        console.log(`[abuse-prevention] IP ${ipAddress} already has ${ipCredits.length} credit row(s) — new session gets 0 free coins`);
+        initialCoins = 0;
+      }
+    }
+
     const [newCredit] = await db
       .insert(credits)
-      .values({ sessionId, userId: userId ?? null, coins: 3 })
+      .values({
+        sessionId,
+        userId: userId ?? null,
+        coins: initialCoins,
+        ipAddress: ipAddress ?? null,
+        createdAt: new Date().toISOString(),
+      })
       .returning();
     return newCredit;
   }

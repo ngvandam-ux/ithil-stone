@@ -709,13 +709,62 @@ function cleanArenaFormat(text: string): string {
 }
 
 // ── Express routes ────────────────────────────────────────────────────
+// ── IP-based rate limiting for abuse prevention ─────────────────────
+const ipAnalysisTracker = new Map<string, { count: number; firstSeen: number; flagged: boolean }>();
+const IP_WINDOW_MS = 60 * 60 * 1000; // 1 hour window
+const IP_MAX_ANALYSES = 10; // max analyses per IP per hour (generous for legit use)
+const IP_FLAG_THRESHOLD = 15; // flag IP as suspicious at this count
+
+function getClientIp(req: any): string {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (forwarded) {
+    const first = (typeof forwarded === "string" ? forwarded : forwarded[0]).split(",")[0].trim();
+    return first;
+  }
+  return req.headers["x-real-ip"] as string || req.ip || req.connection?.remoteAddress || "unknown";
+}
+
+function checkIpRateLimit(ip: string): { allowed: boolean; flagged: boolean; count: number } {
+  if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1") {
+    return { allowed: true, flagged: false, count: 0 };
+  }
+  const now = Date.now();
+  let tracker = ipAnalysisTracker.get(ip);
+  if (!tracker || (now - tracker.firstSeen) > IP_WINDOW_MS) {
+    tracker = { count: 0, firstSeen: now, flagged: false };
+    ipAnalysisTracker.set(ip, tracker);
+  }
+  tracker.count++;
+  if (tracker.count >= IP_FLAG_THRESHOLD) {
+    tracker.flagged = true;
+    console.warn(`[abuse-prevention] ⚠️ IP ${ip} FLAGGED: ${tracker.count} analyses in current window`);
+  }
+  return {
+    allowed: tracker.count <= IP_MAX_ANALYSES,
+    flagged: tracker.flagged,
+    count: tracker.count,
+  };
+}
+
+// Clean up old IP tracker entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of ipAnalysisTracker.entries()) {
+    if (now - data.firstSeen > IP_WINDOW_MS * 2) {
+      ipAnalysisTracker.delete(ip);
+    }
+  }
+}, 30 * 60 * 1000);
+
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Trust proxy (Railway runs behind a reverse proxy)
+  app.set("trust proxy", true);
   // ── Version check endpoint ──────────────────────────────────────
   app.get("/api/version", (_req, res) => {
-    res.json({ version: "barry-pratchett-v1", deployed: new Date().toISOString() });
+    res.json({ version: "abuse-prevention-v1", deployed: new Date().toISOString() });
   });
 
   // ── Middleware: session ID + auth resolution ────────────────────
@@ -900,7 +949,8 @@ export async function registerRoutes(
   app.get("/api/credits", async (req, res) => {
     const sessionId = req.headers["x-session-id"] as string;
     const userId = (req as any).userId as string | undefined;
-    const credit = await storage.initCredits(sessionId, userId);
+    const ip = getClientIp(req);
+    const credit = await storage.initCredits(sessionId, userId, ip);
     res.json(credit);
   });
 
@@ -992,9 +1042,22 @@ export async function registerRoutes(
       const decklist = cleanArenaFormat(parsed.data.decklist);
       const sessionId = req.headers["x-session-id"] as string;
       const userId = (req as any).userId as string | undefined;
+      const ip = getClientIp(req);
+
+      // IP rate limiting — flag/block suspicious compute abuse
+      const rateCheck = checkIpRateLimit(ip);
+      if (!rateCheck.allowed) {
+        console.warn(`[ABUSE] IP ${ip} blocked — ${rateCheck.count} analyses in window`);
+        return res.status(429).json({
+          error: "The Palantír grows dark… too many visions sought. Try again later.",
+        });
+      }
+      if (rateCheck.flagged) {
+        console.warn(`[FLAGGED] IP ${ip} suspicious activity — ${rateCheck.count} analyses in window`);
+      }
 
       // Check credits
-      const credit = await storage.initCredits(sessionId, userId);
+      const credit = await storage.initCredits(sessionId, userId, ip);
       if (credit.coins <= 0) {
         return res.status(402).json({
           error: "No Mithril Rings remaining. Sign in to preserve your balance, or visit the Mint to acquire more.",

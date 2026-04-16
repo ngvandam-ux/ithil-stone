@@ -53,6 +53,8 @@ export const credits = pgTable("credits", {
   sessionId: text("session_id").notNull().unique(),
   userId: text("user_id"), // null for anonymous, set when logged in
   coins: integer("coins").notNull().default(3),
+  ipAddress: text("ip_address"), // track IP for abuse prevention
+  createdAt: text("created_at"), // when this credit row was created
 });
 
 export const insertCreditSchema = createInsertSchema(credits).omit({
