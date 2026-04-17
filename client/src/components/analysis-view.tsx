@@ -131,13 +131,13 @@ function getSectionConfig(headerText: string) {
 }
 
 // Parse the markdown into structured sections
-interface Section {
+export interface Section {
   header: string;
   level: number;
   lines: string[];
 }
 
-function parseIntoSections(content: string): Section[] {
+export function parseIntoSections(content: string): Section[] {
   const lines = content.split("\n");
   const sections: Section[] = [];
   let current: Section | null = null;
@@ -375,7 +375,7 @@ function isTableSeparator(line: string): boolean {
 }
 
 // Render a markdown table
-function MarkdownTable({ rows, knownCards }: { rows: string[]; knownCards?: Set<string> }) {
+export function MarkdownTable({ rows, knownCards }: { rows: string[]; knownCards?: Set<string> }) {
   if (rows.length < 2) return null;
 
   const headerRow = parseTableRow(rows[0]);
@@ -412,7 +412,7 @@ function MarkdownTable({ rows, knownCards }: { rows: string[]; knownCards?: Set<
 }
 
 // Render a single section's body content
-function SectionBody({ lines, knownCards }: { lines: string[]; knownCards?: Set<string> }) {
+export function SectionBody({ lines, knownCards }: { lines: string[]; knownCards?: Set<string> }) {
   // Pre-process: group consecutive table lines
   const elements: React.ReactNode[] = [];
   let i = 0;
@@ -521,7 +521,7 @@ function SectionBody({ lines, knownCards }: { lines: string[]; knownCards?: Set<
 }
 
 // Collapsible section component
-function AnalysisSection({
+export function AnalysisSection({
   section,
   defaultOpen,
   knownCards,

@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage, db } from "./storage";
-import { deckSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable, pageVisits as pageVisitsTable, subscribers as subscribersTable } from "@shared/schema";
+import { deckSubmitSchema, duelSubmitSchema, users as usersTable, analyses as analysesTable, transactions as transactionsTable, credits as creditsTable, newsletters as newslettersTable, pageVisits as pageVisitsTable, subscribers as subscribersTable } from "@shared/schema";
 import { desc, eq } from "drizzle-orm";
 import { randomUUID, randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
@@ -757,6 +757,142 @@ function generateFallbackAnalysis(
 *Full AI-powered analysis including synergy detection, meta positioning, and card swap recommendations requires the AI service to be configured.*`;
 }
 
+// ── AI duel (matchup) analysis via Claude ────────────────────────────
+async function aiDuelAnalysis(
+  deck1Name: string,
+  deck2Name: string,
+  format: string,
+  deck1Stats: any,
+  deck2Stats: any,
+  deck1CardDetails: Array<{ quantity: number; data: any; section: string }>,
+  deck2CardDetails: Array<{ quantity: number; data: any; section: string }>
+): Promise<string> {
+  const deck1CardSummary = buildCardSummary(deck1CardDetails, format);
+  const deck2CardSummary = buildCardSummary(deck2CardDetails, format);
+
+  const formatStatsBlock = (stats: any) => {
+    const colorPips = Object.entries(stats.totalPips)
+      .filter(([k, v]) => k !== "C" && (v as number) > 0)
+      .map(([k, v]) => `${k}: ${v} pips`)
+      .join(", ");
+    const roleBreakdown = Object.entries(stats.roleCounts)
+      .filter(([, v]) => (v as number) > 0)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(", ");
+    return `• Avg CMC: ${stats.avgCmc} | Curve: ${JSON.stringify(stats.manaCurve)}
+• Pips: ${colorPips || "Colorless"} | Colors: ${Object.entries(stats.colorDistribution).filter(([,v]) => (v as number) > 0).map(([k,v]) => `${k}:${v}`).join(", ")}
+• Types: ${stats.creatureCount} creatures, ${stats.instantSorceryCount} instants/sorceries, ${stats.planeswalkerCount} PWs, ${stats.enchantmentCount} enchantments, ${stats.artifactCount} artifacts, ${stats.landCount} lands
+• Roles: ${roleBreakdown}
+• Price: ~$${stats.totalPrice}`;
+  };
+
+  const prompt = `You are a tournament Magic: The Gathering analyst running a head-to-head matchup breakdown. You talk like a sharp competitive player — direct, opinionated, zero fluff.
+
+### ANTI-HALLUCINATION PROTOCOL (CRITICAL)
+1. You have REAL card data from Scryfall provided below with oracle text, mana costs, types, and legality. Use ONLY this verified data for cards in both decks.
+2. NEVER invent card names, abilities, or interactions. NEVER describe cards that don't exist.
+3. NEVER get card abilities wrong — the oracle text is RIGHT THERE in the deck data. Read it.
+4. When describing a combo or interaction, reason through it step by step. Verify each card does what you think it does by checking the provided oracle text.
+
+### Source Priority
+1. VERIFIED DECK DATA — the Scryfall card data provided below (highest confidence)
+2. YOUR ANALYSIS — your own matchup evaluation and strategic reasoning (label opinions as such)
+
+═══════════════════════════════════════════════
+DECK A: "${deck1Name}" (${format})
+${deck1Stats.totalCards} mainboard${deck1Stats.sideboardCards > 0 ? ` + ${deck1Stats.sideboardCards} sideboard` : ""}
+${formatStatsBlock(deck1Stats)}
+═══════════════════════════════════════════════
+${deck1CardSummary}
+
+═══════════════════════════════════════════════
+DECK B: "${deck2Name}" (${format})
+${deck2Stats.totalCards} mainboard${deck2Stats.sideboardCards > 0 ? ` + ${deck2Stats.sideboardCards} sideboard` : ""}
+${formatStatsBlock(deck2Stats)}
+═══════════════════════════════════════════════
+${deck2CardSummary}
+
+Analyze this matchup with these sections. Be specific — reference actual cards from both decks by name. **Bold every card name.**
+
+## ARCHETYPE MATCHUP
+- Deck A archetype + Deck B archetype (e.g., "Aggro vs. Control")
+- Historical context for this type of matchup — how does this class of matchup typically play out?
+
+## MATCHUP VERDICT
+- Who is favored and estimated win percentage (e.g., "Deck A is favored ~60-40")
+- Core reason for the advantage in 2-3 sentences
+- What would flip the matchup (what cards or draws change the equation)
+
+## KEY INTERACTIONS
+Specific card-vs-card interactions that define this matchup. For each:
+- Name the exact cards from both decks
+- Explain why this interaction matters
+- Who benefits
+
+Cover: removal vs. threats, tempo/mana considerations, and any especially punishing or back-breaking card pairings.
+
+## GAMEPLAN: ${deck1Name}
+- How this deck should approach the matchup (aggressive, defensive, tempo, etc.)
+- Cards to prioritize keeping in opening hand / mulligan for
+- Cards that overperform in this specific matchup
+- Cards that underperform in this matchup (dead draws)
+
+## GAMEPLAN: ${deck2Name}
+- How this deck should approach the matchup
+- Cards to prioritize keeping in opening hand / mulligan for
+- Cards that overperform in this specific matchup
+- Cards that underperform in this matchup (dead draws)
+
+## SIDEBOARD GUIDE
+For each deck, if sideboard cards are available:
+### ${deck1Name} Sideboarding
+- What to bring in and what to cut, with reasoning
+### ${deck2Name} Sideboarding
+- What to bring in and what to cut, with reasoning
+
+If no sideboard is available for a deck, suggest 3-5 cards that would be strong sideboard options for this matchup.
+
+## PIVOTAL CARDS
+Table of the most impactful cards in this specific matchup:
+
+| Card | Deck | Matchup Impact | Why |
+|------|------|----------------|-----|
+| **Card Name** | A/B | High/Medium | One-line explanation |
+
+Include 8-12 cards total from both decks.
+
+FORMAT RULES:
+- **EVERY card name MUST be bold** using **Card Name** syntax. Every time. No exceptions.
+- Complete ALL sections. Do not stop early.
+- Target ~2000 words. Dense, not padded.
+- Write like you're talking to competitive players, not writing a term paper.
+- NO hedging like "you might want to consider" — be direct.
+- NO self-corrections mid-sentence.`;
+
+  try {
+    const client = new Anthropic();
+    const message = await client.messages.create({
+      model: "claude-opus-4-7",
+      max_tokens: 16384,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const textBlock = message.content.find((b: any) => b.type === "text");
+
+    // Log AI cost
+    if (message.usage) {
+      logAiUsage("duel_analysis", "claude-opus-4-7", message.usage, {
+        deck1Name, deck2Name, format,
+      });
+    }
+
+    return (textBlock as any)?.text || `## Matchup Analysis Unavailable\n\nThe AI analysis could not be generated. Please try again.`;
+  } catch (err) {
+    console.error("AI duel analysis failed:", err);
+    return `## Matchup Analysis Unavailable\n\nThe AI analysis could not be generated. Please try again.`;
+  }
+}
+
 // ── URL deck import from popular sites ────────────────────────────────
 async function importDeckFromUrl(url: string): Promise<{ deckName: string; format: string; decklist: string } | null> {
   try {
@@ -1424,6 +1560,136 @@ export async function registerRoutes(
     } catch (err: any) {
       console.error("Analysis error:", err);
       res.status(500).json({ error: "Analysis failed. Please try again." });
+    }
+  });
+
+  // ── Duel (matchup) analysis endpoint ─────────────────────────────
+  app.post("/api/analyze-duel", async (req, res) => {
+    try {
+      const parsed = duelSubmitSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: parsed.error.flatten() });
+      }
+
+      const { deck1, deck2, format } = parsed.data;
+      const decklist1 = cleanArenaFormat(deck1.decklist);
+      const decklist2 = cleanArenaFormat(deck2.decklist);
+      const sessionId = req.headers["x-session-id"] as string;
+      const userId = (req as any).userId as string | undefined;
+      const ip = getClientIp(req);
+
+      // IP rate limiting
+      const rateCheck = checkIpRateLimit(ip);
+      if (!rateCheck.allowed) {
+        console.warn(`[ABUSE] IP ${ip} blocked — ${rateCheck.count} analyses in window`);
+        return res.status(429).json({
+          error: "The Palantír grows dark… too many visions sought. Try again later.",
+        });
+      }
+
+      // Check credits >= 2
+      const credit = await storage.initCredits(sessionId, userId, ip);
+      if (credit.coins < 2) {
+        return res.status(402).json({
+          error: "A duel requires 2 Mithril Rings. You have " + credit.coins + ". Visit the Mint to acquire more.",
+        });
+      }
+
+      // Parse both decklists
+      const entries1 = parseDecklist(decklist1);
+      const entries2 = parseDecklist(decklist2);
+      if (entries1.length === 0) {
+        return res.status(400).json({ error: "Could not parse any cards from Deck 1" });
+      }
+      if (entries2.length === 0) {
+        return res.status(400).json({ error: "Could not parse any cards from Deck 2" });
+      }
+
+      // Lookup cards via Scryfall for both decks (interleave to spread rate limit)
+      const uniqueNames1 = [...new Set(entries1.map((e) => e.name))];
+      const uniqueNames2 = [...new Set(entries2.map((e) => e.name))];
+      const cardDataMap1 = new Map<string, any>();
+      const cardDataMap2 = new Map<string, any>();
+
+      // Interleave lookups: alternate between deck1 and deck2 cards
+      const maxLen = Math.max(uniqueNames1.length, uniqueNames2.length);
+      let lookupCount = 0;
+      for (let i = 0; i < maxLen; i++) {
+        if (i < uniqueNames1.length) {
+          const data = await lookupCard(uniqueNames1[i]);
+          if (data) cardDataMap1.set(uniqueNames1[i], data);
+          lookupCount++;
+          if (lookupCount % 8 === 0) await new Promise((r) => setTimeout(r, 150));
+        }
+        if (i < uniqueNames2.length) {
+          const data = await lookupCard(uniqueNames2[i]);
+          if (data) cardDataMap2.set(uniqueNames2[i], data);
+          lookupCount++;
+          if (lookupCount % 8 === 0) await new Promise((r) => setTimeout(r, 150));
+        }
+      }
+
+      const cardDetails1 = entries1.map((e) => ({
+        quantity: e.quantity,
+        data: cardDataMap1.get(e.name) || null,
+        section: e.section,
+      }));
+      const cardDetails2 = entries2.map((e) => ({
+        quantity: e.quantity,
+        data: cardDataMap2.get(e.name) || null,
+        section: e.section,
+      }));
+
+      // Compute stats for both
+      const stats1 = computeStats(cardDetails1);
+      const stats2 = computeStats(cardDetails2);
+
+      // AI duel analysis
+      const rawAnalysis = await aiDuelAnalysis(
+        deck1.deckName, deck2.deckName, format,
+        stats1, stats2, cardDetails1, cardDetails2
+      );
+
+      // Validate suggestions for both decks
+      const allDeckCardNames = new Set([
+        ...entries1.map(e => e.name.toLowerCase()),
+        ...entries2.map(e => e.name.toLowerCase()),
+      ]);
+      const analysisText = await validateAnalysisSuggestions(rawAnalysis, format, allDeckCardNames);
+
+      // Deduct 2 coins
+      await storage.deductCoin(sessionId);
+      await storage.deductCoin(sessionId);
+
+      // Store as analysis (using deck1 name, marking as duel via the result content)
+      await storage.createAnalysis({
+        sessionId,
+        userId: userId ?? null,
+        deckName: `${deck1.deckName} vs ${deck2.deckName}`,
+        format,
+        decklist: `=== DECK 1: ${deck1.deckName} ===\n${decklist1}\n\n=== DECK 2: ${deck2.deckName} ===\n${decklist2}`,
+        cardCount: stats1.totalCards + stats2.totalCards,
+        analysisResult: analysisText,
+        manaCurve: JSON.stringify(stats1.manaCurve),
+        colorDistribution: JSON.stringify(stats1.colorDistribution),
+        createdAt: new Date().toISOString(),
+      });
+
+      res.json({
+        analysis: analysisText,
+        deck1Stats: {
+          ...stats1,
+          deckName: deck1.deckName,
+        },
+        deck2Stats: {
+          ...stats2,
+          deckName: deck2.deckName,
+        },
+        coinsRemaining: (await storage.getCredits(sessionId))?.coins ?? 0,
+      });
+    } catch (err: any) {
+      console.error("Duel analysis error:", err);
+      res.status(500).json({ error: "Duel analysis failed. Please try again." });
     }
   });
 

@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import type { Analysis } from "@shared/schema";
 import AnalysisView from "@/components/analysis-view";
+import DuelAnalysisView from "@/components/duel-analysis-view";
 import ManaCurveChart from "@/components/mana-curve-chart";
 import StatsCards from "@/components/stats-cards";
 import ColorDistChart from "@/components/color-dist-chart";
@@ -131,10 +132,16 @@ function PalantirLogo({ className = "" }: { className?: string }) {
 
 export default function Home() {
   const { toast } = useToast();
+  const [mode, setMode] = useState<"analyze" | "duel">("analyze");
   const [deckName, setDeckName] = useState("");
   const [format, setFormat] = useState("modern");
   const [decklist, setDecklist] = useState("");
   const [currentAnalysis, setCurrentAnalysis] = useState<any | null>(null);
+
+  // Duel mode state
+  const [deck2Name, setDeck2Name] = useState("");
+  const [deck2List, setDeck2List] = useState("");
+  const [duelResult, setDuelResult] = useState<any | null>(null);
 
   const [randomQuote] = useState(() => FLAVOR_QUOTES[Math.floor(Math.random() * FLAVOR_QUOTES.length)]);
   const [emptyMsg] = useState(() => EMPTY_STATE_MESSAGES[Math.floor(Math.random() * EMPTY_STATE_MESSAGES.length)]);
@@ -174,6 +181,32 @@ export default function Home() {
     },
   });
 
+  // Duel mutation
+  const duelMutation = useMutation({
+    mutationFn: async (data: {
+      deck1: { deckName: string; decklist: string };
+      deck2: { deckName: string; decklist: string };
+      format: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/analyze-duel", data);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setDuelResult(data);
+      queryClient.invalidateQueries({ queryKey: ["/api/credits"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/analyses"] });
+    },
+    onError: (err: Error) => {
+      toast({
+        title: "The Duel Falters",
+        description: err.message.includes("402")
+          ? "A duel requires 2 Mithril Rings. Visit the Dwarven Mint to forge more."
+          : err.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAnalyze = () => {
     if (!deckName.trim()) {
       toast({ title: "Name your host", description: "Every army requires a name.", variant: "destructive" });
@@ -186,27 +219,58 @@ export default function Home() {
     analyzeMutation.mutate({ deckName, format, decklist });
   };
 
+  const handleDuel = () => {
+    if (!deckName.trim()) {
+      toast({ title: "Name the first host", description: "Every army requires a name.", variant: "destructive" });
+      return;
+    }
+    if (!decklist.trim()) {
+      toast({ title: "The first stone sees nothing", description: "Present the first decklist.", variant: "destructive" });
+      return;
+    }
+    if (!deck2Name.trim()) {
+      toast({ title: "Name the second host", description: "The challenger also needs a name.", variant: "destructive" });
+      return;
+    }
+    if (!deck2List.trim()) {
+      toast({ title: "The second stone sees nothing", description: "Present the second decklist.", variant: "destructive" });
+      return;
+    }
+    duelMutation.mutate({
+      deck1: { deckName, decklist },
+      deck2: { deckName: deck2Name, decklist: deck2List },
+      format,
+    });
+  };
+
   const loadSample = () => {
     setDeckName("Burn");
     setFormat("modern");
     setDecklist(SAMPLE_DECK);
   };
 
-  const cardCount = decklist
-    .split("\n")
-    .filter((l) => l.trim() && !l.startsWith("//"))
-    .reduce((sum, line) => {
-      const match = line.match(/^(\d+)\s/);
-      return sum + (match ? parseInt(match[1], 10) : 1);
-    }, 0);
+  const countCards = (text: string) =>
+    text
+      .split("\n")
+      .filter((l) => l.trim() && !l.startsWith("//"))
+      .reduce((sum, line) => {
+        const match = line.match(/^(\d+)\s/);
+        return sum + (match ? parseInt(match[1], 10) : 1);
+      }, 0);
+
+  const cardCount = countCards(decklist);
+  const deck2CardCount = countCards(deck2List);
+
+  const isLoading = analyzeMutation.isPending || duelMutation.isPending;
+  const hasResults = mode === "analyze" ? currentAnalysis : duelResult;
 
   return (
     <div className="min-h-screen bg-background">
       {/* Full-screen loading overlay with Elvish quotes */}
-      <LoadingOverlay visible={analyzeMutation.isPending} />
+      <LoadingOverlay visible={isLoading} />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
-        {/* Show analysis or input form */}
+        {/* Show analysis results, duel results, or input form */}
         {currentAnalysis ? (
           <div className="space-y-5">
             {/* Deck header banner */}
@@ -312,6 +376,73 @@ export default function Home() {
               </p>
             </div>
           </div>
+        ) : duelResult ? (
+          <div className="space-y-5">
+            {/* Duel header banner */}
+            <div className="rounded-xl border border-primary/30 bg-card p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <div className="flex items-center gap-2.5 mb-1">
+                    <Swords className="w-5 h-5 text-primary" />
+                    <h2 className="font-display text-lg font-bold tracking-wide">
+                      {duelResult.deck1Stats.deckName} vs {duelResult.deck2Stats.deckName}
+                    </h2>
+                    <Badge variant="secondary" className="text-xs font-medium">
+                      {format.charAt(0).toUpperCase() + format.slice(1)}
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {duelResult.deck1Stats.totalCards + duelResult.deck2Stats.totalCards} cards across both hosts
+                    {" "} · {duelResult.coinsRemaining} rings remaining
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setDuelResult(null)}
+                  className="shrink-0"
+                >
+                  New Duel
+                </Button>
+              </div>
+            </div>
+
+            {/* Section divider */}
+            <div className="relative rounded-lg overflow-hidden">
+              <img
+                src="/art/tolkien-duel-of-songs.jpg"
+                alt=""
+                className="w-full h-16 object-cover object-center opacity-[0.35] dark:opacity-[0.4] dark:invert-0 invert"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-background/80 via-background/40 to-background/80" />
+              <div className="absolute inset-0 flex items-center justify-center gap-1.5">
+                <div className="bg-background/60 backdrop-blur-sm rounded-md px-4 py-1 flex items-center gap-1.5">
+                  <Swords className="w-3.5 h-3.5 text-primary/60" />
+                  <span className="text-[10px] uppercase tracking-[0.15em] font-medium text-foreground/60">Clash of Hosts</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Duel analysis */}
+            <DuelAnalysisView
+              analysis={duelResult.analysis}
+              deck1Stats={duelResult.deck1Stats}
+              deck2Stats={duelResult.deck2Stats}
+              deck1Decklist={decklist}
+              deck2Decklist={deck2List}
+            />
+
+            {/* Flavor quote */}
+            <div className="text-center py-6">
+              <div className="w-8 h-px bg-primary/20 mx-auto mb-4" />
+              <p className="font-elvish text-sm text-muted-foreground/50 italic max-w-md mx-auto leading-relaxed">
+                "{randomQuote.quote}"
+              </p>
+              <p className="text-[10px] text-muted-foreground/30 mt-2 font-elvish">
+                {randomQuote.attribution}
+              </p>
+            </div>
+          </div>
         ) : (
           <>
             {/* Hero with artwork backdrop */}
@@ -345,125 +476,306 @@ export default function Home() {
             </div>
 
             {/* Input form */}
-            <div className="max-w-2xl mx-auto space-y-5">
-              {/* Import options */}
-              <DeckImport
-                onImport={(data) => {
-                  if (data.deckName) setDeckName(data.deckName);
-                  if (data.format) setFormat(data.format);
-                  if (data.decklist) setDecklist(data.decklist);
-                }}
-              />
-
-              {/* Divider */}
-              <div className="flex items-center gap-3">
-                <div className="h-px flex-1 bg-border/40" />
-                <span className="text-[10px] text-muted-foreground/50 uppercase tracking-widest">or inscribe manually</span>
-                <div className="h-px flex-1 bg-border/40" />
+            <div className={`mx-auto space-y-5 ${mode === "duel" ? "max-w-5xl" : "max-w-2xl"}`}>
+              {/* Mode toggle: Analyze / Duel */}
+              <div className="flex justify-center">
+                <div className="flex gap-1 p-0.5 rounded-lg bg-muted/50">
+                  <button
+                    onClick={() => setMode("analyze")}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      mode === "analyze"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Eye className="w-4 h-4" />
+                    Analyze
+                  </button>
+                  <button
+                    onClick={() => setMode("duel")}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      mode === "duel"
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Swords className="w-4 h-4" />
+                    Duel
+                  </button>
+                </div>
               </div>
 
-              {/* Deck name + format row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                    Name of Your Host
-                  </label>
-                  <Input
-                    placeholder="e.g. Burn, Dimir Control"
-                    value={deckName}
-                    onChange={(e) => setDeckName(e.target.value)}
-                    className="h-10"
-                    data-testid="input-deck-name"
+              {/* Shared format selector */}
+              <div className={`${mode === "duel" ? "max-w-xs mx-auto" : "hidden"}`}>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block text-center">
+                  Theatre of War (shared format)
+                </label>
+                <Select value={format} onValueChange={setFormat}>
+                  <SelectTrigger className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FORMATS.map((f) => (
+                      <SelectItem key={f.value} value={f.value}>
+                        {f.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {mode === "analyze" ? (
+                /* ── Single deck mode (existing) ── */
+                <>
+                  {/* Import options */}
+                  <DeckImport
+                    onImport={(data) => {
+                      if (data.deckName) setDeckName(data.deckName);
+                      if (data.format) setFormat(data.format);
+                      if (data.decklist) setDecklist(data.decklist);
+                    }}
                   />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                    Theatre of War
-                  </label>
-                  <Select value={format} onValueChange={setFormat}>
-                    <SelectTrigger
-                      className="h-10"
-                      data-testid="select-format"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FORMATS.map((f) => (
-                        <SelectItem key={f.value} value={f.value}>
-                          {f.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              {/* Decklist textarea */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-medium text-muted-foreground">
-                    Army Manifest
-                    <span className="ml-1.5 text-[10px] text-muted-foreground/50 font-normal">
-                      Arena format auto-detected
-                    </span>
-                  </label>
+                  {/* Divider */}
                   <div className="flex items-center gap-3">
-                    <button
-                      onClick={loadSample}
-                      className="text-xs text-primary hover:text-primary/80 transition-colors"
-                      data-testid="button-load-sample"
-                    >
-                      Summon sample host
-                    </button>
-                    {cardCount > 0 && (
-                      <Badge variant="secondary" className="text-xs">
-                        {cardCount} souls
-                      </Badge>
-                    )}
+                    <div className="h-px flex-1 bg-border/40" />
+                    <span className="text-[10px] text-muted-foreground/50 uppercase tracking-widest">or inscribe manually</span>
+                    <div className="h-px flex-1 bg-border/40" />
                   </div>
-                </div>
-                <Textarea
-                  placeholder={`Paste your decklist here...\n\n4 Lightning Bolt\n4 Goblin Guide\n20 Mountain\n\nSupports Arena, MTGO, and Moxfield export formats`}
-                  value={decklist}
-                  onChange={(e) => setDecklist(e.target.value)}
-                  rows={14}
-                  className="font-mono text-sm resize-none"
-                  data-testid="textarea-decklist"
-                />
-              </div>
 
-              {/* Submit */}
-              <div className="flex items-center justify-between">
-                <p className="text-xs text-muted-foreground">
-                  <Coins className="w-3 h-3 inline mr-1" />
-                  1 ring (credit) per analysis ·{" "}
-                  <span className="text-primary font-medium">
-                    {creditsData?.coins ?? "..."} remaining
-                  </span>
-                  {" "}·{" "}
-                  <Link href="/mint" className="text-primary/70 hover:text-primary underline underline-offset-2">
-                    Get more
-                  </Link>
-                </p>
-                <Button
-                  onClick={handleAnalyze}
-                  disabled={analyzeMutation.isPending || !deckName || !decklist}
-                  className="gap-2 px-6"
-                  data-testid="button-analyze"
-                >
-                  {analyzeMutation.isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Consulting...
-                    </>
-                  ) : (
-                    <>
-                      <Eye className="w-4 h-4" />
-                      Consult the Stone
-                    </>
-                  )}
-                </Button>
-              </div>
+                  {/* Deck name + format row */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                        Name of Your Host
+                      </label>
+                      <Input
+                        placeholder="e.g. Burn, Dimir Control"
+                        value={deckName}
+                        onChange={(e) => setDeckName(e.target.value)}
+                        className="h-10"
+                        data-testid="input-deck-name"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
+                        Theatre of War
+                      </label>
+                      <Select value={format} onValueChange={setFormat}>
+                        <SelectTrigger
+                          className="h-10"
+                          data-testid="select-format"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {FORMATS.map((f) => (
+                            <SelectItem key={f.value} value={f.value}>
+                              {f.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Decklist textarea */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        Army Manifest
+                        <span className="ml-1.5 text-[10px] text-muted-foreground/50 font-normal">
+                          Arena format auto-detected
+                        </span>
+                      </label>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={loadSample}
+                          className="text-xs text-primary hover:text-primary/80 transition-colors"
+                          data-testid="button-load-sample"
+                        >
+                          Summon sample host
+                        </button>
+                        {cardCount > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {cardCount} souls
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <Textarea
+                      placeholder={`Paste your decklist here...\n\n4 Lightning Bolt\n4 Goblin Guide\n20 Mountain\n\nSupports Arena, MTGO, and Moxfield export formats`}
+                      value={decklist}
+                      onChange={(e) => setDecklist(e.target.value)}
+                      rows={14}
+                      className="font-mono text-sm resize-none"
+                      data-testid="textarea-decklist"
+                    />
+                  </div>
+
+                  {/* Submit */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      <Coins className="w-3 h-3 inline mr-1" />
+                      1 ring per analysis ·{" "}
+                      <span className="text-primary font-medium">
+                        {creditsData?.coins ?? "..."} remaining
+                      </span>
+                      {" "}·{" "}
+                      <Link href="/mint" className="text-primary/70 hover:text-primary underline underline-offset-2">
+                        Get more
+                      </Link>
+                    </p>
+                    <Button
+                      onClick={handleAnalyze}
+                      disabled={analyzeMutation.isPending || !deckName || !decklist}
+                      className="gap-2 px-6"
+                      data-testid="button-analyze"
+                    >
+                      {analyzeMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Consulting...
+                        </>
+                      ) : (
+                        <>
+                          <Eye className="w-4 h-4" />
+                          Consult the Stone
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                /* ── Duel mode: two deck panels ── */
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Deck 1 panel */}
+                    <Card className="border-border/40">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
+                            <span className="text-xs font-bold text-primary">A</span>
+                          </div>
+                          <h3 className="text-sm font-semibold">Deck A</h3>
+                        </div>
+
+                        <DeckImport
+                          onImport={(data) => {
+                            if (data.deckName) setDeckName(data.deckName);
+                            if (data.format) setFormat(data.format);
+                            if (data.decklist) setDecklist(data.decklist);
+                          }}
+                        />
+
+                        <Input
+                          placeholder="Deck name (e.g. Burn)"
+                          value={deckName}
+                          onChange={(e) => setDeckName(e.target.value)}
+                          className="h-9"
+                        />
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Decklist
+                            </label>
+                            {cardCount > 0 && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {cardCount} cards
+                              </Badge>
+                            )}
+                          </div>
+                          <Textarea
+                            placeholder="Paste Deck A here..."
+                            value={decklist}
+                            onChange={(e) => setDecklist(e.target.value)}
+                            rows={12}
+                            className="font-mono text-sm resize-none"
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Deck 2 panel */}
+                    <Card className="border-border/40">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center gap-2 mb-1">
+                          <div className="w-6 h-6 rounded-md bg-red-500/10 flex items-center justify-center">
+                            <span className="text-xs font-bold text-red-400">B</span>
+                          </div>
+                          <h3 className="text-sm font-semibold">Deck B</h3>
+                        </div>
+
+                        <DeckImport
+                          onImport={(data) => {
+                            if (data.deckName) setDeck2Name(data.deckName);
+                            if (data.format) setFormat(data.format);
+                            if (data.decklist) setDeck2List(data.decklist);
+                          }}
+                        />
+
+                        <Input
+                          placeholder="Deck name (e.g. Dimir Control)"
+                          value={deck2Name}
+                          onChange={(e) => setDeck2Name(e.target.value)}
+                          className="h-9"
+                        />
+                        <div>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-medium text-muted-foreground">
+                              Decklist
+                            </label>
+                            {deck2CardCount > 0 && (
+                              <Badge variant="secondary" className="text-[10px]">
+                                {deck2CardCount} cards
+                              </Badge>
+                            )}
+                          </div>
+                          <Textarea
+                            placeholder="Paste Deck B here..."
+                            value={deck2List}
+                            onChange={(e) => setDeck2List(e.target.value)}
+                            rows={12}
+                            className="font-mono text-sm resize-none"
+                          />
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Duel submit */}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">
+                      <Coins className="w-3 h-3 inline mr-1" />
+                      2 rings per duel ·{" "}
+                      <span className="text-primary font-medium">
+                        {creditsData?.coins ?? "..."} remaining
+                      </span>
+                      {" "}·{" "}
+                      <Link href="/mint" className="text-primary/70 hover:text-primary underline underline-offset-2">
+                        Get more
+                      </Link>
+                    </p>
+                    <Button
+                      onClick={handleDuel}
+                      disabled={duelMutation.isPending || !deckName || !decklist || !deck2Name || !deck2List}
+                      className="gap-2 px-6"
+                    >
+                      {duelMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Clashing...
+                        </>
+                      ) : (
+                        <>
+                          <Swords className="w-4 h-4" />
+                          Begin the Duel
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </>
+              )}
 
               {/* Feature cards — MTG-specific */}
               <Card className="border-border/30 bg-muted/30">

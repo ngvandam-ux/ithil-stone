@@ -128,6 +128,20 @@ export const deckSubmitSchema = z.object({
 
 export type DeckSubmit = z.infer<typeof deckSubmitSchema>;
 
+export const duelSubmitSchema = z.object({
+  deck1: z.object({
+    deckName: z.string().min(1).max(100),
+    decklist: z.string().min(10),
+  }),
+  deck2: z.object({
+    deckName: z.string().min(1).max(100),
+    decklist: z.string().min(10),
+  }),
+  format: z.enum(["standard", "modern", "legacy", "vintage", "pioneer", "pauper", "commander", "historic", "explorer"]),
+});
+
+export type DuelSubmit = z.infer<typeof duelSubmitSchema>;
+
 // ── Newsletters table ─────────────────────────────────────────────────
 export const newsletters = pgTable("newsletters", {
   id: serial("id").primaryKey(),
