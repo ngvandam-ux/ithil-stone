@@ -507,6 +507,8 @@ export default function Home() {
                   <li>◆ <span className="text-foreground/80 font-medium">Better Loading</span> — progress bar with elapsed timer so you know it's working, not stuck.</li>
                   <li>◆ <span className="text-foreground/80 font-medium">Newsletter Bonus</span> — subscribe and get +1 free ring to analyze another deck.</li>
                   <li>◆ <span className="text-foreground/80 font-medium">Crowdsourced Intelligence</span> — the Stone now learns from every deck analyzed. The more players use it, the smarter it gets — card popularity data from real submissions feeds directly into your analysis.</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Engine Upgrade: Claude Opus 4.7</span> — the Stone now runs on Anthropic's latest flagship model. Sharper reasoning, better archetype awareness, fewer hallucinations.</li>
+                  <li>◆ <span className="text-foreground/80 font-medium">Double Rings</span> — all ring packs now give 2x the rings for the same price. More analyses, same gold.</li>
                 </ul>
                 <p className="text-[10px] text-muted-foreground/40 italic">Built from real player feedback — keep it coming.</p>
               </div>

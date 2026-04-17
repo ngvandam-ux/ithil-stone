@@ -9,9 +9,9 @@ import { Resend } from "resend";
 import { getMetaContext, getCrowdContext, recordDeckSubmission, getMetaCacheStats } from "./meta-fetcher";
 
 // ── AI cost tracking ─────────────────────────────────────────────────
-// Claude Opus 4.6 pricing: $5.00/M input, $25.00/M output
+// Claude Opus 4.7 pricing: $5.00/M input, $25.00/M output
 const AI_PRICING: Record<string, { inputPerMillion: number; outputPerMillion: number }> = {
-  "claude-opus-4-6": { inputPerMillion: 5.00, outputPerMillion: 25.00 },
+  "claude-opus-4-7": { inputPerMillion: 5.00, outputPerMillion: 25.00 },
 };
 
 async function logAiUsage(
@@ -710,7 +710,7 @@ FORMAT RULES:
   try {
     const client = new Anthropic();
     const message = await client.messages.create({
-      model: "claude-opus-4-6",
+      model: "claude-opus-4-7",
       max_tokens: 16384,
       messages: [{ role: "user", content: prompt }],
     });
@@ -719,7 +719,7 @@ FORMAT RULES:
 
     // Log AI cost
     if (message.usage) {
-      logAiUsage("deck_analysis", "claude-opus-4-6", message.usage, { deckName, format });
+      logAiUsage("deck_analysis", "claude-opus-4-7", message.usage, { deckName, format });
     }
 
     return (textBlock as any)?.text || generateFallbackAnalysis(deckName, format, entries, stats);
@@ -1434,9 +1434,9 @@ export async function registerRoutes(
 
   // ── Ring Packs (pricing) ─────────────────────────────────────────
   const RING_PACKS = [
-    { id: "pack-3", rings: 3, priceUsd: 1.99, priceSol: 0.014, label: "Scout's Pouch" },
-    { id: "pack-10", rings: 10, priceUsd: 4.99, priceSol: 0.035, label: "Ranger's Satchel" },
-    { id: "pack-30", rings: 30, priceUsd: 12.99, priceSol: 0.09, label: "War Chest" },
+    { id: "pack-6", rings: 6, priceUsd: 1.99, priceSol: 0.014, label: "Scout's Pouch" },
+    { id: "pack-20", rings: 20, priceUsd: 4.99, priceSol: 0.035, label: "Ranger's Satchel" },
+    { id: "pack-60", rings: 60, priceUsd: 12.99, priceSol: 0.09, label: "War Chest" },
   ];
 
   app.get("/api/ring-packs", (_req, res) => {
@@ -2386,7 +2386,7 @@ ${JSON.stringify(platformStats, null, 2)}
 OUTPUT: Return ONLY the newsletter body content as clean text with markdown-style formatting (**bold** for cards, ## for section headers, - for bullets). Do NOT include HTML tags. I will convert to HTML later.${hasAdminNews ? " IMPORTANT: The newsletter MUST prominently feature the admin-provided news content — specific tournament results, card prices, meta shifts, and set news from it." : ""}`;
 
       const contentResponse = await anthropicClient.messages.create({
-        model: "claude-opus-4-6",
+        model: "claude-opus-4-7",
         max_tokens: 4000,
         messages: [{ role: "user", content: newsletterPrompt }],
       });
@@ -2396,7 +2396,7 @@ OUTPUT: Return ONLY the newsletter body content as clean text with markdown-styl
 
       // Log newsletter content AI cost
       if (contentResponse.usage) {
-        logAiUsage("newsletter_content", "claude-opus-4-6", contentResponse.usage, { newsletterType: type });
+        logAiUsage("newsletter_content", "claude-opus-4-7", contentResponse.usage, { newsletterType: type });
       }
 
       // ── 5. Convert to HTML ─────────────────────────────────────────
@@ -2424,7 +2424,7 @@ ${markdownContent}
 OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the JSON object.`;
 
         const socialResponse = await anthropicClient.messages.create({
-          model: "claude-opus-4-6",
+          model: "claude-opus-4-7",
           max_tokens: 3000,
           messages: [{ role: "user", content: socialPrompt }],
         });
@@ -2434,7 +2434,7 @@ OUTPUT: Return ONLY valid JSON. No markdown wrapping, no explanation. Just the J
 
         // Log social media AI cost
         if (socialResponse.usage) {
-          logAiUsage("newsletter_social", "claude-opus-4-6", socialResponse.usage, { newsletterType: type });
+          logAiUsage("newsletter_social", "claude-opus-4-7", socialResponse.usage, { newsletterType: type });
         }
 
         // Try to parse JSON, stripping potential markdown fences
