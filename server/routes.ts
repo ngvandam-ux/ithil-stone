@@ -2040,27 +2040,43 @@ export async function registerRoutes(
     const heroUrl = `${APP_URL}/art/tolkien-${heroArt}.jpg`;
 
     // Convert markdown-style formatting to HTML
+    // Step 1: Mark headers with placeholders so they don't get wrapped in <p> tags
     let html = markdownContent
-      // Headers
-      .replace(/^## (.+)$/gm, '<h2 style="color:#4ade80; font-variant:small-caps; letter-spacing:1px; font-size:18px; margin:28px 0 12px; border-bottom:1px solid rgba(74,222,128,0.15); padding-bottom:6px;">$1</h2>')
-      .replace(/^### (.+)$/gm, '<h3 style="color:#e2e8e2; font-size:15px; margin:20px 0 8px;">$1</h3>')
-      // Bold text — preserve all **text** as <strong>, check card image map with cleaned name
-      .replace(/\*\*(.+?)\*\*/g, (_, text) => {
-        // Strip trailing punctuation for card image lookup, but preserve original text
-        const cleanName = text.replace(/[:\.,;!?]+$/, '').trim();
-        const imgUrl = cardImageMap[cleanName] || cardImageMap[text];
-        if (imgUrl) {
-          return `<strong style="color:#e2e8e2;">${text}</strong><br/><img src="${imgUrl}" alt="${cleanName}" width="200" style="border-radius:8px; border:1px solid rgba(74,222,128,0.3); margin:8px 0; display:block;" />`;
-        }
-        return `<strong style="color:#e2e8e2;">${text}</strong>`;
-      })
-      // Bullet points
-      .replace(/^- (.+)$/gm, '<div style="padding-left:16px; margin:4px 0;"><span style="color:#4ade80; margin-right:6px;">•</span>$1</div>')
-      // Line breaks
-      .replace(/\n\n/g, '</p><p style="margin:12px 0; line-height:1.65;">')
-      .replace(/\n/g, '<br/>');
+      .replace(/^## (.+)$/gm, '%%H2_START%%$1%%H2_END%%')
+      .replace(/^### (.+)$/gm, '%%H3_START%%$1%%H3_END%%');
 
-    html = `<p style="margin:12px 0; line-height:1.65;">${html}</p>`;
+    // Step 2: Bold text — preserve all **text** as <strong>, check card image map with cleaned name
+    html = html.replace(/\*\*(.+?)\*\*/g, (_, text) => {
+      const cleanName = text.replace(/[:\.,;!?]+$/, '').trim();
+      const imgUrl = cardImageMap[cleanName] || cardImageMap[text];
+      if (imgUrl) {
+        return `<strong style="color:#e2e8e2;">${text}</strong><br/><img src="${imgUrl}" alt="${cleanName}" width="200" style="border-radius:8px; border:1px solid rgba(74,222,128,0.3); margin:8px 0; display:block;" />`;
+      }
+      return `<strong style="color:#e2e8e2;">${text}</strong>`;
+    });
+
+    // Step 3: Bullet points
+    html = html.replace(/^- (.+)$/gm, '<div style="padding-left:16px; margin:4px 0;"><span style="color:#4ade80; margin-right:6px;">•</span>$1</div>');
+
+    // Step 4: Split into blocks on double newlines, wrap only non-header blocks in <p>
+    const pStyle = 'style="margin:12px 0; line-height:1.65;"';
+    html = html.split(/\n\n/).map(block => {
+      block = block.replace(/\n/g, '<br/>');
+      if (block.includes('%%H2_START%%')) {
+        return block
+          .replace(/%%H2_START%%/g, '<h2 style="color:#4ade80; font-variant:small-caps; letter-spacing:1px; font-size:18px; margin:28px 0 12px; border-bottom:1px solid rgba(74,222,128,0.15); padding-bottom:6px;">')
+          .replace(/%%H2_END%%/g, '</h2>');
+      }
+      if (block.includes('%%H3_START%%')) {
+        return block
+          .replace(/%%H3_START%%/g, '<h3 style="color:#e2e8e2; font-size:15px; margin:20px 0 8px;">')
+          .replace(/%%H3_END%%/g, '</h3>');
+      }
+      if (block.includes('<div style="padding-left')) {
+        return block; // bullet blocks are already wrapped
+      }
+      return `<p ${pStyle}>${block}</p>`;
+    }).join('\n');
 
     return `<!DOCTYPE html>
 <html lang="en">
